@@ -45,3 +45,30 @@ export const calculateDailyCalorieGoal = ({
 
   return Math.round(goal);
 };
+
+export interface MacroGoals {
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export const calculateMacroGoals = (totalCalories: number, weight: number, goalWeight: number): MacroGoals => {
+  let pRatio, cRatio, fRatio;
+  
+  if (goalWeight > weight + 0.5) {
+    // Bulking / 增肌
+    pRatio = 0.25; cRatio = 0.50; fRatio = 0.25;
+  } else if (goalWeight < weight - 0.5) {
+    // Cutting / 減脂
+    pRatio = 0.30; cRatio = 0.40; fRatio = 0.30;
+  } else {
+    // Maintaining / 一般維持
+    pRatio = 0.15; cRatio = 0.55; fRatio = 0.30;
+  }
+
+  return {
+    protein: Math.round((totalCalories * pRatio) / 4),
+    carbs: Math.round((totalCalories * cRatio) / 4),
+    fat: Math.round((totalCalories * fRatio) / 9),
+  };
+};

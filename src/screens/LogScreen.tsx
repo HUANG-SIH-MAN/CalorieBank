@@ -15,17 +15,35 @@ import { useAppContext } from '../context/AppContext';
 import { EXERCISE_TYPES } from '../constants/exercises';
 import DatePickerModal from '../components/DatePickerModal';
 import ExerciseFavoriteModal from '../components/ExerciseFavoriteModal';
+import FoodScanModal from '../components/FoodScanModal';
+import { calculateMacroGoals } from '../utils/fitness';
 
 type TabType = 'DIET' | 'EXERCISE';
 
 export default function LogScreen() {
-  const { userProfile, exerciseLogs, addExerciseLog, deleteExerciseLog, foodLogs, deleteFoodLog } = useAppContext();
+  const { userProfile, exerciseLogs, addExerciseLog, deleteExerciseLog, foodLogs, addFoodLog, deleteFoodLog } = useAppContext();
   const [activeTab, setActiveTab] = useState<TabType>('DIET');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [favoriteModalVisible, setFavoriteModalVisible] = useState(false);
+  const [foodScanModalVisible, setFoodScanModalVisible] = useState(false);
+
+  // Macro Calculations for summary
+  const currentFoodLogs = foodLogs.filter(log => log.date === selectedDate);
+  const todayCalories = currentFoodLogs.reduce((sum, log) => sum + log.calories, 0);
+  const todayProtein = currentFoodLogs.reduce((s, l) => s + (l.protein || 0), 0);
+  const todayCarbs = currentFoodLogs.reduce((s, l) => s + (l.carbs || 0), 0);
+  const todayFat = currentFoodLogs.reduce((s, l) => s + (l.fat || 0), 0);
+
+  const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
+  const macroGoals = calculateMacroGoals(
+    calorieGoal,
+    userProfile?.weight || 70,
+    userProfile?.goalWeight || 70
+  );
 
   // Exercise states
+  // ... existing code ...
   const [selectedExerciseId, setSelectedExerciseId] = useState(EXERCISE_TYPES[0].id);
   const [duration, setDuration] = useState('30');
 
@@ -74,6 +92,30 @@ export default function LogScreen() {
     Alert.alert('成功', `已紀錄 ${exercise.name} ${mins} 分鐘，消耗 ${caloriesBurned} kcal`);
   };
 
+  const handleFoodScanConfirm = (result: any) => {
+    // Determine meal type based on current time if it's today, otherwise default to SNACK
+    const now = new Date();
+    const currentHour = now.getHours();
+    let mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' = 'SNACK';
+
+    if (currentHour < 10) mealType = 'BREAKFAST';
+    else if (currentHour < 14) mealType = 'LUNCH';
+    else if (currentHour < 20) mealType = 'DINNER';
+    else mealType = 'SNACK';
+
+    addFoodLog({
+      name: result.name,
+      calories: result.calories,
+      protein: result.protein,
+      carbs: result.carbs,
+      fat: result.fat,
+      mealType: mealType,
+      date: selectedDate,
+    });
+
+    Alert.alert('成功', `已加入飲食紀錄：${result.name}`);
+  };
+
   const renderDietTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.aiCard}>
@@ -84,7 +126,7 @@ export default function LogScreen() {
           <Text style={styles.aiTitle}>AI 拍照辨識食物</Text>
           <Text style={styles.aiDesc}>拍下你的餐點，讓 AI 為你分析內容與熱量</Text>
         </View>
-        <TouchableOpacity style={styles.cameraBtn}>
+        <TouchableOpacity style={styles.cameraBtn} onPress={() => setFoodScanModalVisible(true)}>
           <Ionicons name="camera" size={24} color="#FFF" />
           <Text style={styles.cameraBtnText}>開始拍照</Text>
         </TouchableOpacity>
@@ -94,21 +136,51 @@ export default function LogScreen() {
         <Text style={styles.sectionTitle}>{formatDateDisplay(selectedDate)} 飲食紀錄</Text>
       </View>
 
-      {foodLogs.filter(log => log.date === selectedDate).map(log => (
-        <View key={log.id} style={styles.logItem}>
-          <View>
-            <Text style={styles.logItemName}>{log.name}</Text>
-            <Text style={styles.logItemSub}>{log.calories} kcal | 蛋白質 {log.protein}g</Text>
+      {currentFoodLogs.length > 0 ? (
+        currentFoodLogs.map((log, idx) => (
+          <View key={log.id || idx} style={styles.dietLogItem}>
+            <View style={styles.dietLogContent}>
+              <View style={styles.logItemHeaderRow}>
+                <Text style={styles.logItemName} numberOfLines={1}>{log.name}</Text>
+                <Text style={styles.logItemCalories}>{log.calories} kcal</Text>
+              </View>
+
+              <View style={styles.miniMacroContainer}>
+                <MiniMacroBar
+                  label="蛋白質"
+                  value={log.protein || 0}
+                  goal={macroGoals.protein}
+                  color="#FF7043"
+                />
+                <MiniMacroBar
+                  label="碳水"
+                  value={log.carbs || 0}
+                  goal={macroGoals.carbs}
+                  color="#4CAF50"
+                />
+                <MiniMacroBar
+                  label="脂肪"
+                  value={log.fat || 0}
+                  goal={macroGoals.fat}
+                  color="#FBC02D"
+                />
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => deleteFoodLog(log.id)} style={styles.deleteBtn}>
+              <Ionicons name="trash-outline" size={18} color="#C7C7CC" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => deleteFoodLog(log.id)}>
-            <Ionicons name="trash-outline" size={20} color="#999" />
-          </TouchableOpacity>
+        ))
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>今天還沒記錄食物喔！</Text>
         </View>
-      ))}
+      )}
     </View>
   );
 
   const renderExerciseTab = () => {
+    // ... no changes needed here ...
     const dayExercises = exerciseLogs.filter(log => log.date === selectedDate);
     const totalBurned = dayExercises.reduce((sum, log) => sum + log.caloriesBurned, 0);
 
@@ -233,6 +305,13 @@ export default function LogScreen() {
       <ExerciseFavoriteModal
         visible={favoriteModalVisible}
         onClose={() => setFavoriteModalVisible(false)}
+      />
+
+      <FoodScanModal
+        visible={foodScanModalVisible}
+        onClose={() => setFoodScanModalVisible(false)}
+        onConfirm={handleFoodScanConfirm}
+        date={selectedDate}
       />
     </SafeAreaView>
   );
@@ -390,4 +469,92 @@ const styles = StyleSheet.create({
     color: '#999',
     fontStyle: 'italic',
   },
+  // Macro summary in LogScreen
+  macroSummaryCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  macroItem: { flex: 1 },
+  macroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 },
+  macroLabel: { fontSize: 13, color: '#333', fontWeight: 'bold' },
+  macroValue: { fontSize: 10, color: '#AEAEB2' },
+  macroBarBg: { height: 4, backgroundColor: '#F2F2F7', borderRadius: 2, overflow: 'hidden' },
+  macroBarFill: { height: '100%', borderRadius: 2 },
+  // Diet log styling
+  dietLogItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  dietLogContent: { flex: 1, marginRight: 10 },
+  logItemHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  logItemCalories: { fontSize: 14, fontWeight: 'bold', color: '#8E8E93' },
+  miniMacroContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 15,
+  },
+  miniMacroItem: { flex: 1 },
+  miniMacroLabel: { fontSize: 11, color: '#333', fontWeight: 'bold' },
+  miniMacroPercent: { fontSize: 10, color: '#AEAEB2' },
+  miniMacroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 },
+  miniBarBg: { height: 3, backgroundColor: '#F2F2F7', borderRadius: 1.5, overflow: 'hidden' },
+  miniBarFill: { height: '100%', borderRadius: 1.5 },
+  deleteBtn: { padding: 4 },
 });
+
+function MiniMacroBar({ label, value, goal, color }: { label: string, value: number, goal: number, color: string }) {
+  const percent = Math.round((value / goal) * 100);
+  const progress = Math.min(value / goal, 1);
+
+  return (
+    <View style={styles.miniMacroItem}>
+      <View style={styles.miniMacroHeader}>
+        <Text style={styles.miniMacroLabel}>{label}</Text>
+        <Text style={styles.miniMacroPercent}>{Math.round(value)}g</Text>
+      </View>
+      <View style={styles.miniBarBg}>
+        <View style={[styles.miniBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
+  const progress = Math.min(current / target, 1);
+  return (
+    <View style={styles.macroItem}>
+      <View style={styles.macroHeader}>
+        <Text style={styles.macroLabel}>{label}</Text>
+        <Text style={styles.macroValue}>{Math.round(current)} / {target}g</Text>
+      </View>
+      <View style={styles.macroBarBg}>
+        <View style={[styles.macroBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}

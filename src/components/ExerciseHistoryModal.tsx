@@ -39,31 +39,26 @@ export default function ExerciseHistoryModal({
     new Date(b).getTime() - new Date(a).getTime()
   );
 
-  // Prepare data for the 90-day chart
+  // Prepare 30-day chart data — all 30 days including zeros
   const prepareChartData = () => {
     const now = new Date();
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(now.getDate() - 90);
+    const days30: { date: string; calories: number; hasData: boolean }[] = [];
 
-    const chartDates: string[] = [];
-    const calorieValues: number[] = [];
-
-    // Filter and sort for chart
-    const filteredDates = Object.keys(dailyTotals)
-      .filter(date => new Date(date) >= ninetyDaysAgo)
-      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-    if (filteredDates.length === 0) {
-      return {
-        labels: [],
-        datasets: [{ data: [0] }]
-      };
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      days30.push({
+        date: dateStr,
+        calories: dailyTotals[dateStr]?.calories ?? 0,
+        hasData: !!dailyTotals[dateStr],
+      });
     }
 
-    // Limit points to avoid crowding (show max 7 bars if many days)
-    const labels = filteredDates.map((date, index) => {
-      if (index === 0 || index === filteredDates.length - 1 || index === Math.floor(filteredDates.length / 2)) {
-        const d = new Date(date);
+    // Show label every 5 days to avoid crowding (indices 0, 4, 9, 14, 19, 24, 29)
+    const labels = days30.map((item, index) => {
+      if (index % 5 === 0 || index === 29) {
+        const d = new Date(item.date);
         return `${d.getMonth() + 1}/${d.getDate()}`;
       }
       return '';
@@ -73,19 +68,28 @@ export default function ExerciseHistoryModal({
       labels,
       datasets: [
         {
-          data: filteredDates.map(date => dailyTotals[date].calories),
+          data: days30.map(item => item.calories),
+          colors: days30.map(item =>
+            item.hasData
+              ? (opacity = 1) => `rgba(76, 175, 80, ${opacity})`   // green if exercised
+              : (opacity = 1) => `rgba(244, 67, 54, ${opacity})`   // red if no exercise
+          ),
         }
       ],
+      days30,
     };
   };
 
-  const chartData = prepareChartData();
+  const { labels, datasets, days30 } = prepareChartData();
+  const chartData = { labels, datasets };
   const screenWidth = Dimensions.get('window').width;
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
   };
+
+  const today = new Date().toISOString().split('T')[0];
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -104,51 +108,58 @@ export default function ExerciseHistoryModal({
           <View style={styles.chartCard}>
             <View style={styles.chartHeader}>
               <Text style={styles.chartTitle}>消耗卡路里</Text>
-              <Text style={styles.chartSubtitle}>(最近90天)</Text>
+              <Text style={styles.chartSubtitle}>(最近30天)</Text>
             </View>
 
-            {sortedDates.length > 0 ? (
-              <BarChart
-                data={chartData}
-                width={screenWidth - 60}
-                height={220}
-                yAxisLabel=""
-                yAxisSuffix=""
-                chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
-                  decimalPlaces: 0,
-                  color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`, // Green theme
-                  labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
-                  style: { borderRadius: 16 },
-                }}
-                verticalLabelRotation={0}
-                style={styles.chart}
-                showValuesOnTopOfBars
-              />
-            ) : (
-              <View style={styles.noData}>
-                <Text style={styles.noDataText}>尚無運動數據</Text>
-              </View>
-            )}
+            <BarChart
+              data={chartData}
+              width={screenWidth - 60}
+              height={220}
+              yAxisLabel=""
+              yAxisSuffix=""
+              withCustomBarColorFromData
+              flatColor
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
+                style: { borderRadius: 16 },
+                barPercentage: 0.6,
+              }}
+              verticalLabelRotation={0}
+              style={styles.chart}
+              showValuesOnTopOfBars={false}
+            />
           </View>
 
           {/* Daily Logs Section */}
           <View style={styles.recordsSection}>
             <Text style={styles.recordsTitle}>每日統計</Text>
-            {sortedDates.map((date) => (
-              <View key={date} style={styles.recordItem}>
-                <View style={styles.recordInfo}>
-                  <Text style={styles.recordDate}>{formatDate(date)}</Text>
-                  <Text style={styles.recordSub}>{dailyTotals[date].duration} 分鐘 運動</Text>
-                </View>
-                <View style={styles.recordValueContainer}>
-                  <Text style={styles.recordCalories}>{dailyTotals[date].calories}</Text>
-                  <Text style={styles.unitText}>kcal</Text>
-                </View>
-              </View>
-            ))}
+            {sortedDates.length === 0 ? (
+              <Text style={styles.noDataText}>尚無運動紀錄</Text>
+            ) : (
+              sortedDates.map((date) => {
+                const isToday = date === today;
+                return (
+                  <View key={date} style={styles.recordItem}>
+                    <View style={styles.recordInfo}>
+                      <View style={styles.recordDateRow}>
+                        <Text style={styles.recordDate}>{formatDate(date)}</Text>
+                        {isToday && <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>今天</Text></View>}
+                      </View>
+                      <Text style={styles.recordSub}>{dailyTotals[date].duration} 分鐘</Text>
+                    </View>
+                    <View style={styles.recordValueContainer}>
+                      <Text style={styles.recordCalories}>{dailyTotals[date].calories}</Text>
+                      <Text style={styles.unitText}>kcal</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -176,28 +187,44 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     padding: 20,
     marginBottom: 25,
-    boxShadow: '0px 4px 15px rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 3,
   },
   chartHeader: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 20 },
   chartTitle: { fontSize: 18, fontWeight: 'bold', marginRight: 8 },
   chartSubtitle: { fontSize: 12, color: '#999' },
   chart: { marginVertical: 8, borderRadius: 16 },
-  noData: { height: 200, justifyContent: 'center', alignItems: 'center' },
-  noDataText: { color: '#999' },
+  legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 12, color: '#666' },
   recordsSection: { marginBottom: 30 },
   recordsTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 15, color: '#333' },
   recordItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 18,
+    paddingVertical: 15,
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
   },
   recordInfo: { flex: 1 },
-  recordDate: { fontSize: 18, color: '#333', fontWeight: '500' },
-  recordSub: { fontSize: 14, color: '#999', marginTop: 4 },
+  recordDateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recordDate: { fontSize: 16, color: '#333', fontWeight: '500' },
+  todayBadge: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  todayBadgeText: { fontSize: 11, color: '#2196F3', fontWeight: 'bold' },
+  recordSub: { fontSize: 13, color: '#999', marginTop: 3 },
   recordValueContainer: { alignItems: 'flex-end' },
   recordCalories: { fontSize: 22, color: '#4CAF50', fontWeight: 'bold' },
+  recordCaloriesZero: { color: '#F44336' },
   unitText: { fontSize: 12, color: '#999' },
+  noDataText: { fontSize: 15, color: '#999', textAlign: 'center', paddingVertical: 30 },
 });

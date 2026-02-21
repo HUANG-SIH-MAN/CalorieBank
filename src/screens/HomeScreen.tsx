@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
 import { useAppContext } from '../context/AppContext';
 import WeightLogModal from '../components/WeightLogModal';
 import DatePickerModal from '../components/DatePickerModal';
@@ -8,10 +9,11 @@ import WeightHistoryModal from '../components/WeightHistoryModal';
 import WaterLogModal from '../components/WaterLogModal';
 import WaterSettingsModal from '../components/WaterSettingsModal';
 import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
-import StepTrackerCard from '../components/StepTrackerCard';
+import { calculateMacroGoals } from '../utils/fitness';
 
 export default function HomeScreen() {
   const { userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, addWeightLog, addWaterLog } = useAppContext();
+  // ... existing states ...
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightHistoryVisible, setWeightHistoryVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -48,17 +50,30 @@ export default function HomeScreen() {
   const currentWaterLogs = waterLogs.filter(log => log.date === selectedDate);
   const todayWater = currentWaterLogs.reduce((sum, log) => sum + log.amount, 0);
 
+  const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
+  const macroGoals = calculateMacroGoals(
+    calorieGoal,
+    userProfile?.weight || 70,
+    userProfile?.goalWeight || 70
+  );
+
+  const todayProtein = currentFoodLogs.reduce((s, l) => s + (l.protein || 0), 0);
+  const todayCarbs = currentFoodLogs.reduce((s, l) => s + (l.carbs || 0), 0);
+  const todayFat = currentFoodLogs.reduce((s, l) => s + (l.fat || 0), 0);
+
+  const currentExerciseLogs = exerciseLogs.filter(log => log.date === selectedDate);
+  const todayExerciseCalories = currentExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
+  const todayExerciseDuration = currentExerciseLogs.reduce((sum, log) => sum + log.durationMinutes, 0);
+
   // Calculate Water Goal: Profile custom goal OR weight * 35
-  const waterGoal = userProfile?.waterGoal || Math.round((userProfile?.weight || 70) * 35);
+  const baseWaterGoal = userProfile?.waterGoal || Math.round((userProfile?.weight || 70) * 35);
+  // Exercise bonus water: every 30 min of exercise = +200ml
+  const exerciseBonusWater = Math.round((todayExerciseDuration / 30) * 200);
+  const waterGoal = baseWaterGoal + exerciseBonusWater;
   const waterProgress = Math.min(todayWater / waterGoal, 1);
 
   // Container sizes from profile or defaults
   const containers = userProfile?.waterContainers || { small: 250, medium: 500, large: 1000 };
-
-  const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
-  const currentExerciseLogs = exerciseLogs.filter(log => log.date === selectedDate);
-  const todayExerciseCalories = currentExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
-  const todayExerciseDuration = currentExerciseLogs.reduce((sum, log) => sum + log.durationMinutes, 0);
 
   const remaining = calorieGoal - todayCalories + todayExerciseCalories;
 
@@ -105,46 +120,105 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Calorie Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>卡路里</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>卡路里</Text>
+            <TouchableOpacity style={styles.goalBadge}>
+              <Text style={styles.goalBadgeText}>
+                {userProfile?.goalWeight && userProfile?.weight
+                  ? (userProfile.goalWeight < userProfile.weight ? '減重' : '增肌')
+                  : '維持'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.formulaText}>還能吃 = 推薦攝入量 - 飲食 + 運動</Text>
+
           <View style={styles.mainInfo}>
-            <View style={styles.circleContainer}>
-              <Text style={styles.remainingValue}>{remaining}</Text>
-              <Text style={styles.remainingLabel}>還能吃</Text>
+            <View style={styles.circleWrapper}>
+              <CalorieCircle
+                goal={calorieGoal}
+                consumed={todayCalories}
+                exercise={todayExerciseCalories}
+                remaining={remaining}
+              />
             </View>
+
             <View style={styles.statsColumn}>
-              <View style={styles.statItem}>
-                <Text style={styles.statSmallLabel}>🏆 推薦攝入量: {calorieGoal}</Text>
+              <View style={styles.statLine}>
+                <Ionicons name="trophy-outline" size={18} color="#FFD700" style={styles.statIcon} />
+                <View>
+                  <Text style={styles.statLabel}>推薦攝入量</Text>
+                  <Text style={styles.statValue}>{calorieGoal}</Text>
+                </View>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statSmallLabel}>🍴 飲食: {todayCalories}</Text>
+              <View style={styles.statLine}>
+                <Ionicons name="fast-food-outline" size={18} color="#2196F3" style={styles.statIcon} />
+                <View>
+                  <Text style={styles.statLabel}>飲食</Text>
+                  <Text style={styles.statValue}>{todayCalories}</Text>
+                </View>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statSmallLabel}>🔥 運動: {todayExerciseCalories}</Text>
+              <View style={styles.statLine}>
+                <Ionicons name="flame-outline" size={18} color="#FF5722" style={styles.statIcon} />
+                <View>
+                  <Text style={styles.statLabel}>運動</Text>
+                  <Text style={styles.statValue}>{todayExerciseCalories}</Text>
+                </View>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Meal Categories */}
+        {/* Diet Log Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🍔 我的日常飲食報告</Text>
+            <Text style={styles.sectionTitle}>🥗 飲食紀錄</Text>
           </View>
+          <View style={styles.dietCard}>
+            {/* Macro Progress Bars */}
+            <View style={styles.macroProgressContainer}>
+              <MacroProgress
+                label="蛋白質"
+                current={todayProtein}
+                target={macroGoals.protein}
+                color="#FF7043"
+              />
+              <MacroProgress
+                label="碳水"
+                current={todayCarbs}
+                target={macroGoals.carbs}
+                color="#4CAF50"
+              />
+              <MacroProgress
+                label="脂肪"
+                current={todayFat}
+                target={macroGoals.fat}
+                color="#FBC02D"
+              />
+            </View>
 
-          {[
-            { name: '早餐', icon: '🍳' },
-            { name: '午餐', icon: '🍗' },
-            { name: '晚餐', icon: '🍔' },
-            { name: '點心', icon: '☕' }
-          ].map((meal) => (
-            <TouchableOpacity key={meal.name} style={styles.mealCard}>
-              <View style={styles.mealInfo}>
-                <Text style={styles.mealIcon}>{meal.icon}</Text>
-                <Text style={styles.mealName}>{meal.name}</Text>
+            {currentFoodLogs.length === 0 ? (
+              <View style={styles.emptyDiet}>
+                <Text style={styles.emptyDietIcon}>🍽️</Text>
+                <Text style={styles.emptyDietText}>今天還沒有飲食紀錄</Text>
+                <Text style={styles.emptyDietSub}>前往「紀錄」頁面新增飲食</Text>
               </View>
-              <Ionicons name="add-circle" size={30} color="#66BB6A" />
-            </TouchableOpacity>
-          ))}
+            ) : (
+              currentFoodLogs.map((log, idx) => (
+                <View key={idx} style={styles.foodLogItem}>
+                  <View style={styles.foodLogLeft}>
+                    <Text style={styles.foodLogName} numberOfLines={1}>{log.name}</Text>
+                    <Text style={styles.foodLogMacro}>
+                      {log.protein ? `蛋白 ${log.protein.toFixed(0)}g` : ''}
+                      {log.carbs ? `  碳水 ${log.carbs.toFixed(0)}g` : ''}
+                      {log.fat ? `  脂肪 ${log.fat.toFixed(0)}g` : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.foodLogCalories}>{log.calories} kcal</Text>
+                </View>
+              ))
+            )}
+          </View>
         </View>
 
         {/* Weight Tracking Card */}
@@ -216,6 +290,11 @@ export default function HomeScreen() {
                 <View>
                   <Text style={styles.infoTitle}>飲水紀錄</Text>
                   <Text style={styles.infoSub}>{todayWater} / {waterGoal} ml</Text>
+                  {exerciseBonusWater > 0 && (
+                    <Text style={styles.exerciseBonusNote}>
+                      🏃 運動 {todayExerciseDuration} 分鐘，加碼 +{exerciseBonusWater} ml
+                    </Text>
+                  )}
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -228,10 +307,27 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Progress Bar */}
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${waterProgress * 100}%` }]} />
-            </View>
+            {/* Progress Bar + Status */}
+            {(() => {
+              const remaining = Math.max(0, waterGoal - todayWater);
+              return (
+                <View>
+                  <View style={styles.progressBarBg}>
+                    <View style={[styles.progressBarFill, { width: `${waterProgress * 100}%` }]} />
+                  </View>
+                  <View style={styles.waterStatusRow}>
+                    {waterProgress >= 1 ? (
+                      <Text style={styles.waterCompleteText}>🎉 今日飲水達標！</Text>
+                    ) : (
+                      <Text style={styles.waterRemainingText}>
+                        還差 <Text style={styles.waterRemainingBold}>{remaining} ml</Text> 達標
+                      </Text>
+                    )}
+                    <Text style={styles.waterPercentText}>{Math.round(waterProgress * 100)}%</Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* Quick Add Buttons */}
             <View style={styles.quickAddRow}>
@@ -318,31 +414,75 @@ const styles = StyleSheet.create({
   content: { padding: 15 },
   card: {
     backgroundColor: '#FFF',
-    borderRadius: 25,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
     elevation: 3,
   },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
-  mainInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-  circleContainer: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    borderWidth: 8,
-    borderColor: '#E9ECEF',
-    justifyContent: 'center',
-    alignItems: 'center'
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  remainingValue: { fontSize: 32, fontWeight: 'bold' },
-  remainingLabel: { fontSize: 14, color: '#6C757D' },
-  statsColumn: { flex: 1, marginLeft: 20 },
-  statItem: { marginBottom: 8 },
-  statSmallLabel: { fontSize: 14, color: '#495057' },
+  goalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5E6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  goalBadgeText: {
+    fontSize: 12,
+    color: '#FF9500',
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  formulaText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+  },
+  mainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  circleWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsColumn: {
+    gap: 15,
+  },
+  statLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 100,
+  },
+  statIcon: {
+    marginRight: 10,
+    width: 24,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C1C1E',
+  },
   section: { marginBottom: 20 },
   sectionHeader: { marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
@@ -376,6 +516,45 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
+  dietCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  nutritionSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EEE',
+    marginBottom: 12,
+  },
+  nutritionSummaryItem: { alignItems: 'center', flex: 1 },
+  nutritionSummaryValue: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  nutritionSummaryLabel: { fontSize: 11, color: '#999', marginTop: 2 },
+  nutritionDivider: { width: 0.5, height: 32, backgroundColor: '#EEE' },
+  emptyDiet: { alignItems: 'center', paddingVertical: 24 },
+  emptyDietIcon: { fontSize: 36, marginBottom: 8 },
+  emptyDietText: { fontSize: 15, color: '#555', fontWeight: '500' },
+  emptyDietSub: { fontSize: 12, color: '#999', marginTop: 4 },
+  foodLogItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F0F0F0',
+  },
+  foodLogLeft: { flex: 1, marginRight: 10 },
+  foodLogName: { fontSize: 15, color: '#333', fontWeight: '500' },
+  foodLogMacro: { fontSize: 11, color: '#999', marginTop: 3 },
+  foodLogCalories: { fontSize: 15, fontWeight: 'bold', color: '#FF7043' },
   infoCardVertical: {
     backgroundColor: '#FFF',
     borderRadius: 25,
@@ -433,6 +612,28 @@ const styles = StyleSheet.create({
   },
   progressBarBg: { height: 8, backgroundColor: '#E3F2FD', borderRadius: 4, marginBottom: 20, overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#2196F3', borderRadius: 4 },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 5,
+    marginBottom: 10,
+  },
+  segment: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+  },
+  segmentFilled: { backgroundColor: '#2196F3' },
+  segmentEmpty: { backgroundColor: '#E0E0E0' },
+  waterStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  waterRemainingText: { fontSize: 13, color: '#999' },
+  waterRemainingBold: { fontSize: 13, color: '#2196F3', fontWeight: 'bold' },
+  waterCompleteText: { fontSize: 13, color: '#4CAF50', fontWeight: 'bold' },
+  waterPercentText: { fontSize: 13, color: '#2196F3', fontWeight: 'bold' },
   quickAddRow: { flexDirection: 'row', justifyContent: 'space-between' },
   quickAddBtn: {
     flex: 1,
@@ -446,4 +647,87 @@ const styles = StyleSheet.create({
   },
   quickAddLabel: { fontSize: 14, fontWeight: 'bold', color: '#2196F3', marginTop: 5 },
   quickAddSub: { fontSize: 10, color: '#999', marginTop: 2 },
+  exerciseBonusNote: {
+    fontSize: 11,
+    color: '#2196F3',
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
+  // Macro Progress
+  macroProgressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EEE',
+    marginBottom: 12,
+    gap: 15,
+  },
+  macroItem: { flex: 1 },
+  macroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  macroLabel: { fontSize: 13, color: '#666', fontWeight: '500' },
+  macroValue: { fontSize: 11, color: '#999' },
+  macroBarBg: { height: 6, backgroundColor: '#F0F0F0', borderRadius: 3, overflow: 'hidden' },
+  macroBarFill: { height: '100%', borderRadius: 3 },
 });
+
+function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
+  const progress = Math.min(current / target, 1);
+  return (
+    <View style={styles.macroItem}>
+      <View style={styles.macroHeader}>
+        <Text style={styles.macroLabel}>{label}</Text>
+        <Text style={styles.macroValue}>{Math.round(current)} / {target}g</Text>
+      </View>
+      <View style={styles.macroBarBg}>
+        <View style={[styles.macroBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, consumed: number, exercise: number, remaining: number }) {
+  const radius = 85;
+  const stroke = 12;
+  const normalizedRadius = radius - stroke;
+  const circumference = normalizedRadius * 2 * Math.PI;
+
+  const total = goal + exercise;
+  const remainingRatio = Math.max(remaining / total, 0);
+
+  // Colors per user request
+  const blueColor = "#2196F3";
+  const greyColor = "#E5E5EA";
+
+  return (
+    <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+      <Svg height={radius * 2} width={radius * 2} style={{ transform: [{ rotate: '-90deg' }] }}>
+        {/* Step 1: Base Circle - Grey (The consumed/empty part as background) */}
+        <Circle
+          stroke={greyColor}
+          fill="transparent"
+          strokeWidth={stroke}
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+        {/* Step 2: Overlay Circle - Blue (The "Remaining" part) starting from 12 o'clock */}
+        <Circle
+          stroke={blueColor}
+          fill="transparent"
+          strokeWidth={stroke}
+          strokeDasharray={`${remainingRatio * circumference} ${circumference}`}
+          strokeDashoffset={0}
+          strokeLinecap="round"
+          r={normalizedRadius}
+          cx={radius}
+          cy={radius}
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#1C1C1E' }}>{remaining}</Text>
+        <Text style={{ fontSize: 14, color: '#8E8E93', marginTop: 2 }}>還能吃</Text>
+      </View>
+    </View>
+  );
+}
