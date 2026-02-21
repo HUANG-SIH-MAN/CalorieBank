@@ -9,6 +9,12 @@ export interface UserProfile {
   goalWeight: number;
   activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
   dailyCalorieGoal: number;
+  waterGoal?: number; // Optional, can be calculated
+  waterContainers?: {
+    small: number;
+    medium: number;
+    large: number;
+  };
 }
 
 export interface FoodLog {
@@ -26,4 +32,10 @@ export interface WeightLog {
   id: string;
   weight: number;
   date: string; // ISO date
+}
+export interface WaterLog {
+  id: string;
+  amount: number; // in ml
+  date: string; // ISO date (YYYY-MM-DD)
+  timestamp: string; // Full timestamp for specific entry time
 }

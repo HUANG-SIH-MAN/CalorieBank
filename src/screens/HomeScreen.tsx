@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 import WeightLogModal from '../components/WeightLogModal';
 import DatePickerModal from '../components/DatePickerModal';
 import WeightHistoryModal from '../components/WeightHistoryModal';
+import WaterLogModal from '../components/WaterLogModal';
+import WaterSettingsModal from '../components/WaterSettingsModal';
 
 export default function HomeScreen() {
-  const { userProfile, foodLogs, weightLogs, addWeightLog } = useAppContext();
+  const { userProfile, foodLogs, weightLogs, waterLogs, addWeightLog, addWaterLog } = useAppContext();
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightHistoryVisible, setWeightHistoryVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [waterModalVisible, setWaterModalVisible] = useState(false);
+  const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   const changeDate = (days: number) => {
@@ -31,14 +35,40 @@ export default function HomeScreen() {
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
+  // Data Calculations
   const currentFoodLogs = foodLogs.filter(log => log.date === selectedDate);
   const todayCalories = currentFoodLogs.reduce((sum, log) => sum + log.calories, 0);
 
-  const dayWeightLog = weightLogs.find(log => log.date === selectedDate);
+  const dayWeightLog = weightLogs.find((log: any) => log.date === selectedDate);
   const displayWeight = dayWeightLog ? dayWeightLog.weight : (userProfile?.weight || 0);
+
+  const currentWaterLogs = waterLogs.filter(log => log.date === selectedDate);
+  const todayWater = currentWaterLogs.reduce((sum, log) => sum + log.amount, 0);
+
+  // Calculate Water Goal: Profile custom goal OR weight * 35
+  const waterGoal = userProfile?.waterGoal || Math.round((userProfile?.weight || 70) * 35);
+  const waterProgress = Math.min(todayWater / waterGoal, 1);
+
+  // Container sizes from profile or defaults
+  const containers = userProfile?.waterContainers || { small: 250, medium: 500, large: 1000 };
 
   const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
   const remaining = calorieGoal - todayCalories;
+
+  // BMI Calculation
+  const heightM = (userProfile?.height || 170) / 100;
+  const bmi = displayWeight / (heightM * heightM);
+
+  const getBMICategory = (val: number) => {
+    if (val < 18.5) return { label: '過輕', color: '#64B5F6', tip: '增加營養攝取吧！' };
+    if (val < 24) return { label: '正常', color: '#66BB6A', tip: '很棒，保持喔！' };
+    if (val < 27) return { label: '過重', color: '#FFB74D', tip: '要注意飲食囉！' };
+    if (val < 30) return { label: '輕度肥胖', color: '#FF8A65', tip: '多運動增加代謝！' };
+    if (val < 35) return { label: '中度肥胖', color: '#E57373', tip: '減重刻不容緩。' };
+    return { label: '重度肥胖', color: '#D32F2F', tip: '建議諮詢醫療建議。' };
+  };
+
+  const bmiStatus = getBMICategory(bmi);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -88,6 +118,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Meal Categories */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>🍔 我的日常飲食報告</Text>
@@ -109,7 +140,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Weight Tracking Card - Clickable for History */}
+        {/* Weight Tracking Card */}
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.infoCard}
@@ -121,8 +152,16 @@ export default function HomeScreen() {
                 <MaterialCommunityIcons name="scale-bathroom" size={24} color="#FBC02D" />
               </View>
               <View>
-                <Text style={styles.infoTitle}>體重紀錄</Text>
-                <Text style={styles.infoSub}>{displayWeight} kg</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.infoTitle}>體重紀錄</Text>
+                  <View style={[styles.bmiBadge, { backgroundColor: bmiStatus.color }]}>
+                    <Text style={styles.bmiBadgeText}>{bmiStatus.label}</Text>
+                  </View>
+                </View>
+                <Text style={styles.infoSub}>
+                  {displayWeight} kg <Text style={styles.bmiText}>| BMI: {bmi.toFixed(1)}</Text>
+                </Text>
+                <Text style={styles.bmiTip}>{bmiStatus.tip}</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -132,6 +171,55 @@ export default function HomeScreen() {
               <Text style={styles.recordText}>記錄</Text>
             </TouchableOpacity>
           </TouchableOpacity>
+        </View>
+
+        {/* Water Tracking Card */}
+        <View style={styles.section}>
+          <View style={styles.infoCardVertical}>
+            <View style={styles.waterHeader}>
+              <View style={styles.infoLeft}>
+                <View style={[styles.iconBg, { backgroundColor: '#E3F2FD' }]}>
+                  <FontAwesome5 name="tint" size={20} color="#2196F3" />
+                </View>
+                <View>
+                  <Text style={styles.infoTitle}>飲水紀錄</Text>
+                  <Text style={styles.infoSub}>{todayWater} / {waterGoal} ml</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => setWaterSettingsVisible(true)} style={{ marginRight: 15 }}>
+                  <Ionicons name="settings-outline" size={24} color="#999" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setWaterModalVisible(true)}>
+                  <Ionicons name="add-circle-outline" size={28} color="#2196F3" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${waterProgress * 100}%` }]} />
+            </View>
+
+            {/* Quick Add Buttons */}
+            <View style={styles.quickAddRow}>
+              {[
+                { label: '小玻璃杯', amount: containers.small, icon: 'glass-whiskey' },
+                { label: '環保瓶', amount: containers.medium, icon: 'prescription-bottle' },
+                { label: '大水壺', amount: containers.large, icon: 'bitbucket' }
+              ].map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.quickAddBtn}
+                  onPress={() => addWaterLog(item.amount, selectedDate)}
+                >
+                  <FontAwesome5 name={item.icon} size={18} color="#2196F3" />
+                  <Text style={styles.quickAddLabel}>{item.amount}ml</Text>
+                  <Text style={styles.quickAddSub}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
       </ScrollView>
 
@@ -158,6 +246,17 @@ export default function HomeScreen() {
         onSave={(w, d) => addWeightLog({ weight: w, date: d })}
         currentWeight={displayWeight}
         initialDate={selectedDate}
+      />
+
+      <WaterLogModal
+        visible={waterModalVisible}
+        onClose={() => setWaterModalVisible(false)}
+        onSave={(amount) => addWaterLog(amount, selectedDate)}
+      />
+
+      <WaterSettingsModal
+        visible={waterSettingsVisible}
+        onClose={() => setWaterSettingsVisible(false)}
       />
     </SafeAreaView>
   );
@@ -227,10 +326,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
   },
+  infoCardVertical: {
+    backgroundColor: '#FFF',
+    borderRadius: 25,
+    padding: 20,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
+  },
+  waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   infoLeft: { flexDirection: 'row', alignItems: 'center' },
   iconBg: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   infoTitle: { fontSize: 18, fontWeight: 'bold' },
-  infoSub: { fontSize: 14, color: '#6C757D' },
+  infoSub: { fontSize: 14, color: '#6C757D', marginTop: 2 },
+  bmiBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  bmiBadgeText: {
+    fontSize: 11,
+    color: '#FFF',
+    fontWeight: 'bold'
+  },
+  bmiText: {
+    color: '#ADB5BD',
+    fontWeight: 'normal'
+  },
+  bmiTip: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+    fontStyle: 'italic'
+  },
   recordBtn: {
     borderWidth: 1.5,
     borderColor: '#333',
@@ -239,4 +366,19 @@ const styles = StyleSheet.create({
     borderRadius: 22
   },
   recordText: { fontSize: 16, fontWeight: 'bold' },
+  progressBarBg: { height: 8, backgroundColor: '#E3F2FD', borderRadius: 4, marginBottom: 20, overflow: 'hidden' },
+  progressBarFill: { height: '100%', backgroundColor: '#2196F3', borderRadius: 4 },
+  quickAddRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  quickAddBtn: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: '#F1F3F5'
+  },
+  quickAddLabel: { fontSize: 14, fontWeight: 'bold', color: '#2196F3', marginTop: 5 },
+  quickAddSub: { fontSize: 10, color: '#999', marginTop: 2 },
 });
