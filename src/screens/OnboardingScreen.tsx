@@ -12,18 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 import { UserProfile } from '../types';
 
-const ACTIVITY_LEVELS = [
-  { id: 'SEDENTARY', label: '幾乎不運動', desc: '久坐、辦公室工作', factor: 1.2 },
-  { id: 'LIGHT', label: '輕度活動', desc: '每週運動 1-3 天', factor: 1.375 },
-  { id: 'MODERATE', label: '中度活動', desc: '每週運動 3-5 天', factor: 1.55 },
-  { id: 'ACTIVE', label: '高度活動', desc: '每週運動 6-7 天', factor: 1.725 },
-];
-
-const WEIGHT_SPEEDS = [
-  { id: 'SLOW', label: '緩慢', desc: '每週 0.25kg', offset: 250 },
-  { id: 'STEADY', label: '穩定', desc: '每週 0.5kg', offset: 500 },
-  { id: 'ACTIVE', label: '積極', desc: '每週 1kg', offset: 1000 },
-];
+import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
+import { calculateDailyCalorieGoal } from '../utils/fitness';
 
 export default function OnboardingScreen() {
   const { setUserProfile } = useAppContext();
@@ -40,31 +30,15 @@ export default function OnboardingScreen() {
   const [speed, setSpeed] = useState('STEADY');
 
   const calculateGoal = () => {
-    const w = parseFloat(weight);
-    const h = parseFloat(height);
-    const a = parseFloat(age);
-    if (isNaN(w) || isNaN(h) || isNaN(a)) return 0;
-
-    const act = ACTIVITY_LEVELS.find(l => l.id === activityLevel)?.factor || 1.2;
-    const spdOffset = WEIGHT_SPEEDS.find(s => s.id === speed)?.offset || 500;
-
-    // Mifflin-St Jeor
-    let bmr = 10 * w + 6.25 * h - 5 * a;
-    bmr = gender === 'MALE' ? bmr + 5 : bmr - 161;
-
-    const tdee = bmr * act;
-
-    const targetWeight = parseFloat(goalWeight);
-    let goal;
-    if (targetWeight < w) {
-      goal = tdee - spdOffset;
-    } else if (targetWeight > w) {
-      goal = tdee + spdOffset;
-    } else {
-      goal = tdee;
-    }
-
-    return Math.round(goal);
+    return calculateDailyCalorieGoal({
+      gender,
+      weight: parseFloat(weight),
+      height: parseFloat(height),
+      age: parseFloat(age),
+      activityLevel,
+      goalWeight: parseFloat(goalWeight),
+      speedId: speed,
+    });
   };
 
   const handleFinish = () => {
@@ -77,6 +51,7 @@ export default function OnboardingScreen() {
       weight: parseFloat(weight),
       goalWeight: parseFloat(goalWeight),
       activityLevel: activityLevel as any,
+      weightChangeSpeed: speed as any,
       dailyCalorieGoal,
     };
     setUserProfile(profile);

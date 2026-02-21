@@ -8,6 +8,7 @@ export interface UserProfile {
   weight: number; // in kg
   goalWeight: number;
   activityLevel: 'SEDENTARY' | 'LIGHT' | 'MODERATE' | 'ACTIVE' | 'VERY_ACTIVE';
+  weightChangeSpeed?: 'SLOW' | 'STEADY' | 'FAST';
   dailyCalorieGoal: number;
   waterGoal?: number; // Optional, can be calculated
   waterContainers?: {
