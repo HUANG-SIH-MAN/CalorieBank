@@ -7,14 +7,17 @@ import DatePickerModal from '../components/DatePickerModal';
 import WeightHistoryModal from '../components/WeightHistoryModal';
 import WaterLogModal from '../components/WaterLogModal';
 import WaterSettingsModal from '../components/WaterSettingsModal';
+import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
+import StepTrackerCard from '../components/StepTrackerCard';
 
 export default function HomeScreen() {
-  const { userProfile, foodLogs, weightLogs, waterLogs, addWeightLog, addWaterLog } = useAppContext();
+  const { userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, addWeightLog, addWaterLog } = useAppContext();
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightHistoryVisible, setWeightHistoryVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
+  const [exerciseHistoryVisible, setExerciseHistoryVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   const changeDate = (days: number) => {
@@ -53,7 +56,11 @@ export default function HomeScreen() {
   const containers = userProfile?.waterContainers || { small: 250, medium: 500, large: 1000 };
 
   const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
-  const remaining = calorieGoal - todayCalories;
+  const currentExerciseLogs = exerciseLogs.filter(log => log.date === selectedDate);
+  const todayExerciseCalories = currentExerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
+  const todayExerciseDuration = currentExerciseLogs.reduce((sum, log) => sum + log.durationMinutes, 0);
+
+  const remaining = calorieGoal - todayCalories + todayExerciseCalories;
 
   // BMI Calculation
   const heightM = (userProfile?.height || 170) / 100;
@@ -112,7 +119,7 @@ export default function HomeScreen() {
                 <Text style={styles.statSmallLabel}>🍴 飲食: {todayCalories}</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statSmallLabel}>🔥 運動: 0</Text>
+                <Text style={styles.statSmallLabel}>🔥 運動: {todayExerciseCalories}</Text>
               </View>
             </View>
           </View>
@@ -172,6 +179,31 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </View>
+
+        {/* Exercise Summary Card */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.infoCard}
+            onPress={() => setExerciseHistoryVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.infoLeft}>
+              <View style={[styles.iconBg, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="fitness" size={24} color="#4CAF50" />
+              </View>
+              <View>
+                <Text style={styles.infoTitle}>運動消耗</Text>
+                <Text style={styles.infoSub}>
+                  {todayExerciseCalories} kcal <Text style={styles.bmiText}>| {todayExerciseDuration} 分鐘</Text>
+                </Text>
+                <Text style={styles.bmiTip}>
+                  {todayExerciseDuration > 0 ? '今天運動量很充實喔！' : '還沒運動嗎？動一動更有活力！'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+        {/* <StepTrackerCard date={selectedDate} /> */}
 
         {/* Water Tracking Card */}
         <View style={styles.section}>
@@ -258,6 +290,12 @@ export default function HomeScreen() {
         visible={waterSettingsVisible}
         onClose={() => setWaterSettingsVisible(false)}
       />
+
+      <ExerciseHistoryModal
+        visible={exerciseHistoryVisible}
+        onClose={() => setExerciseHistoryVisible(false)}
+        exerciseLogs={exerciseLogs}
+      />
     </SafeAreaView>
   );
 }
@@ -283,7 +321,11 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     padding: 20,
     marginBottom: 20,
-    boxShadow: '0px 2px 10px rgba(0,0,0,0.05)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
   cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
   mainInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
@@ -312,7 +354,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 10,
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
   mealInfo: { flexDirection: 'row', alignItems: 'center' },
   mealIcon: { fontSize: 24, marginRight: 15 },
@@ -324,13 +370,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
   infoCardVertical: {
     backgroundColor: '#FFF',
     borderRadius: 25,
     padding: 20,
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
   waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   infoLeft: { flexDirection: 'row', alignItems: 'center' },
@@ -366,6 +420,17 @@ const styles = StyleSheet.create({
     borderRadius: 22
   },
   recordText: { fontSize: 16, fontWeight: 'bold' },
+  exerciseListStats: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F1F8E9',
+    borderRadius: 12,
+  },
+  exerciseCountText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
   progressBarBg: { height: 8, backgroundColor: '#E3F2FD', borderRadius: 4, marginBottom: 20, overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#2196F3', borderRadius: 4 },
   quickAddRow: { flexDirection: 'row', justifyContent: 'space-between' },

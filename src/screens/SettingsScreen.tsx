@@ -188,6 +188,13 @@ export default function SettingsScreen() {
               isEditing={isEditing}
               onChangeText={(v: string) => updateField('goalWeight', parseFloat(v) || 0)}
             />
+            <SettingInput
+              label="每日步數目標"
+              value={isEditing ? (editProfile?.stepGoal || 10000).toString() : (userProfile.stepGoal || 10000).toString()}
+              unit="步"
+              isEditing={isEditing}
+              onChangeText={(v: string) => updateField('stepGoal', parseInt(v) || 0)}
+            />
 
             {isEditing ? (
               <View style={styles.expandedSection}>
