@@ -6,10 +6,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   TextInput,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 import { EXERCISE_TYPES } from '../constants/exercises';
@@ -144,7 +144,7 @@ export default function ExerciseFavoriteModal({ visible, onClose }: ExerciseFavo
     return (
       <Modal visible={visible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
-          <SafeAreaView style={styles.formContent}>
+          <SafeAreaView style={styles.formContent} edges={['bottom']}>
             <View style={styles.header}>
               <TouchableOpacity onPress={() => setIsAddingMode(false)} style={styles.closeBtn}>
                 <Ionicons name="arrow-back" size={24} color="#333" />
@@ -183,7 +183,7 @@ export default function ExerciseFavoriteModal({ visible, onClose }: ExerciseFavo
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
-        <SafeAreaView style={styles.modalContent}>
+        <SafeAreaView style={styles.modalContent} edges={['bottom']}>
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={28} color="#333" />
@@ -337,7 +337,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1.5,
     borderColor: 'transparent',
-    boxShadow: '0px 2px 5px rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 1,
   },
   itemCardSelected: {
     borderColor: '#007AFF',

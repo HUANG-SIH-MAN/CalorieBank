@@ -5,12 +5,14 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Dimensions,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BarChart } from 'react-native-chart-kit';
+import Constants from 'expo-constants';
 import { ExerciseLog } from '../types';
 
 interface ExerciseHistoryModalProps {
@@ -39,50 +41,51 @@ export default function ExerciseHistoryModal({
     new Date(b).getTime() - new Date(a).getTime()
   );
 
-  // Prepare 30-day chart data — all 30 days including zeros
+  const screenWidth = Dimensions.get('window').width;
+  // chart width = screen - scrollPadding(20*2) - cardPadding(16*2) - extraSafety(10)
+  const chartWidth = screenWidth - 40 - 32 - 10;
+
+  // Prepare chart data — show only last 7 days for maximum clarity on mobile
   const prepareChartData = () => {
     const now = new Date();
-    const days30: { date: string; calories: number; hasData: boolean }[] = [];
+    const daysToShow = 7; // Show 1 week
+    const daysData: { date: string; calories: number; hasData: boolean }[] = [];
 
-    for (let i = 29; i >= 0; i--) {
+    for (let i = daysToShow - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(now.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      days30.push({
+      daysData.push({
         date: dateStr,
         calories: dailyTotals[dateStr]?.calories ?? 0,
         hasData: !!dailyTotals[dateStr],
       });
     }
 
-    // Show label every 5 days to avoid crowding (indices 0, 4, 9, 14, 19, 24, 29)
-    const labels = days30.map((item, index) => {
-      if (index % 5 === 0 || index === 29) {
-        const d = new Date(item.date);
-        return `${d.getMonth() + 1}/${d.getDate()}`;
-      }
-      return '';
+    // Show labels for every day since it's only 7 days
+    const labels = daysData.map((item) => {
+      const d = new Date(item.date);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
     });
 
     return {
       labels,
       datasets: [
         {
-          data: days30.map(item => item.calories),
-          colors: days30.map(item =>
+          data: daysData.map(item => item.calories),
+          colors: daysData.map(item =>
             item.hasData
-              ? (opacity = 1) => `rgba(76, 175, 80, ${opacity})`   // green if exercised
-              : (opacity = 1) => `rgba(244, 67, 54, ${opacity})`   // red if no exercise
+              ? (opacity = 1) => `rgba(76, 175, 80, ${opacity})`
+              : (opacity = 1) => `rgba(224, 224, 224, ${opacity})`
           ),
         }
       ],
-      days30,
+      daysData,
     };
   };
 
-  const { labels, datasets, days30 } = prepareChartData();
+  const { labels, datasets, daysData } = prepareChartData();
   const chartData = { labels, datasets };
-  const screenWidth = Dimensions.get('window').width;
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -91,16 +94,21 @@ export default function ExerciseHistoryModal({
 
   const today = new Date().toISOString().split('T')[0];
 
+  // Calculate max value for chart (with some padding above)
+  const maxCalories = Math.max(...daysData.map(d => d.calories), 100);
+
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-            <Ionicons name="chevron-back" size={28} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>運動歷史</Text>
-          <View style={styles.headerBtn} />
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
+              <Ionicons name="chevron-back" size={28} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>運動歷史</Text>
+            <View style={styles.headerBtn} />
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -108,31 +116,42 @@ export default function ExerciseHistoryModal({
           <View style={styles.chartCard}>
             <View style={styles.chartHeader}>
               <Text style={styles.chartTitle}>消耗卡路里</Text>
-              <Text style={styles.chartSubtitle}>(最近30天)</Text>
+              <Text style={styles.chartSubtitle}>(最近7天)</Text>
             </View>
 
-            <BarChart
-              data={chartData}
-              width={screenWidth - 60}
-              height={220}
-              yAxisLabel=""
-              yAxisSuffix=""
-              withCustomBarColorFromData
-              flatColor
-              chartConfig={{
-                backgroundColor: '#ffffff',
-                backgroundGradientFrom: '#ffffff',
-                backgroundGradientTo: '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
-                style: { borderRadius: 16 },
-                barPercentage: 0.6,
-              }}
-              verticalLabelRotation={0}
-              style={styles.chart}
-              showValuesOnTopOfBars={false}
-            />
+            <View style={styles.chartContainer}>
+              <BarChart
+                data={chartData}
+                width={chartWidth}
+                height={180}
+                yAxisLabel=""
+                yAxisSuffix=""
+                withCustomBarColorFromData={true}
+                flatColor={true}
+                fromZero={true}
+                chartConfig={{
+                  backgroundColor: '#ffffff',
+                  backgroundGradientFrom: '#ffffff',
+                  backgroundGradientTo: '#ffffff',
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
+                  propsForLabels: {
+                    fontSize: 10,
+                  },
+                  barPercentage: 0.6,
+                  propsForBackgroundLines: {
+                    strokeDasharray: '',
+                    stroke: '#F0F0F0',
+                    strokeWidth: 1,
+                  },
+                }}
+                verticalLabelRotation={0}
+                style={{ marginLeft: -16 }}
+                showValuesOnTopOfBars={false}
+                segments={3}
+              />
+            </View>
           </View>
 
           {/* Daily Logs Section */}
@@ -170,50 +189,53 @@ export default function ExerciseHistoryModal({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   header: {
+    paddingTop: Platform.OS === 'android' ? Constants.statusBarHeight : 0,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EEE',
+  },
+  headerRow: {
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 15,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#EEE',
   },
-  headerBtn: { width: 44, alignItems: 'center' },
+  headerBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   scrollContent: { padding: 20 },
   chartCard: {
     backgroundColor: '#FFF',
-    borderRadius: 25,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 2,
+    overflow: 'hidden',
   },
-  chartHeader: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 20 },
-  chartTitle: { fontSize: 18, fontWeight: 'bold', marginRight: 8 },
+  chartContainer: {
+    overflow: 'hidden',
+    marginHorizontal: -4,
+  },
+  chartHeader: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
+  chartTitle: { fontSize: 17, fontWeight: 'bold', marginRight: 6 },
   chartSubtitle: { fontSize: 12, color: '#999' },
-  chart: { marginVertical: 8, borderRadius: 16 },
-  legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 12, color: '#666' },
   recordsSection: { marginBottom: 30 },
-  recordsTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 15, color: '#333' },
+  recordsTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#333' },
   recordItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
+    paddingVertical: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
   },
   recordInfo: { flex: 1 },
   recordDateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordDate: { fontSize: 16, color: '#333', fontWeight: '500' },
+  recordDate: { fontSize: 15, color: '#333', fontWeight: '500' },
   todayBadge: {
     backgroundColor: '#E3F2FD',
     paddingHorizontal: 7,
@@ -223,8 +245,7 @@ const styles = StyleSheet.create({
   todayBadgeText: { fontSize: 11, color: '#2196F3', fontWeight: 'bold' },
   recordSub: { fontSize: 13, color: '#999', marginTop: 3 },
   recordValueContainer: { alignItems: 'flex-end' },
-  recordCalories: { fontSize: 22, color: '#4CAF50', fontWeight: 'bold' },
-  recordCaloriesZero: { color: '#F44336' },
+  recordCalories: { fontSize: 20, color: '#4CAF50', fontWeight: 'bold' },
   unitText: { fontSize: 12, color: '#999' },
   noDataText: { fontSize: 15, color: '#999', textAlign: 'center', paddingVertical: 30 },
 });

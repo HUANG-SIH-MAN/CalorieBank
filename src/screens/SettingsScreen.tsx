@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -11,7 +10,9 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useAppContext } from '../context/AppContext';
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
@@ -133,18 +134,20 @@ export default function SettingsScreen() {
   const currentSpeed = isEditing ? (editProfile?.weightChangeSpeed || 'STEADY') : (userProfile.weightChangeSpeed || 'STEADY');
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>設定</Text>
-        {isEditing ? (
-          <TouchableOpacity onPress={handleSave}>
-            <Text style={styles.saveBtnText}>儲存</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={startEditing}>
-            <Text style={styles.editBtnText}>編輯</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>設定</Text>
+          {isEditing ? (
+            <TouchableOpacity onPress={handleSave}>
+              <Text style={styles.saveBtnText}>儲存</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={startEditing}>
+              <Text style={styles.editBtnText}>編輯</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -404,19 +407,22 @@ function SettingInput({ label, value, unit, isEditing, onChangeText }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   header: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? Constants.statusBarHeight : 0,
     backgroundColor: '#FFF',
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
   },
+  headerRow: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   editBtnText: { color: '#007AFF', fontSize: 16, fontWeight: '600' },
   saveBtnText: { color: '#66BB6A', fontSize: 16, fontWeight: 'bold' },
-  scrollContent: { padding: 20 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
   profileSummary: { alignItems: 'center', marginBottom: 30, marginTop: 10 },
   avatar: {
     width: 80,
@@ -425,7 +431,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
-    boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
   profileName: { fontSize: 22, fontWeight: 'bold', color: '#333' },
   profileSub: { fontSize: 14, color: '#999', marginTop: 5 },
@@ -435,7 +445,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 20,
     overflow: 'hidden',
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   itemRow: {
     flexDirection: 'row',

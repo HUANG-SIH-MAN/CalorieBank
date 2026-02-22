@@ -6,9 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
 
@@ -45,7 +45,7 @@ export default function WaterSettingsModal({ visible, onClose }: WaterSettingsMo
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <SafeAreaView style={styles.overlay}>
+      <SafeAreaView style={styles.overlay} edges={['bottom']}>
         <View style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.headerBtn}>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import Svg, { Circle } from 'react-native-svg';
 import { useAppContext } from '../context/AppContext';
 import WeightLogModal from '../components/WeightLogModal';
@@ -93,27 +95,29 @@ export default function HomeScreen() {
   const bmiStatus = getBMICategory(bmi);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {/* Date Header */}
       <View style={styles.dateHeader}>
-        <View style={styles.headerColumn}>
-          <TouchableOpacity onPress={() => changeDate(-1)} style={styles.headerIconBtn}>
-            <Ionicons name="chevron-back" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
+        <View style={styles.headerRow}>
+          <View style={styles.headerColumn}>
+            <TouchableOpacity onPress={() => changeDate(-1)} style={styles.headerIconBtn}>
+              <Ionicons name="chevron-back" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
 
-        <TouchableOpacity
-          onPress={() => setDatePickerVisible(true)}
-          style={styles.headerCenter}
-        >
-          <Text style={styles.dateText}>{formatDateDisplay(selectedDate)}</Text>
-          <Ionicons name="chevron-down" size={16} color="#333" style={{ marginLeft: 4 }} />
-        </TouchableOpacity>
-
-        <View style={styles.headerColumn}>
-          <TouchableOpacity onPress={() => changeDate(1)} style={styles.headerIconBtn}>
-            <Ionicons name="chevron-forward" size={24} color="#333" />
+          <TouchableOpacity
+            onPress={() => setDatePickerVisible(true)}
+            style={styles.headerCenter}
+          >
+            <Text style={styles.dateText}>{formatDateDisplay(selectedDate)}</Text>
+            <Ionicons name="chevron-down" size={16} color="#333" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
+
+          <View style={styles.headerColumn}>
+            <TouchableOpacity onPress={() => changeDate(1)} style={styles.headerIconBtn}>
+              <Ionicons name="chevron-forward" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -399,29 +403,32 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   dateHeader: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? Constants.statusBarHeight : 0,
     backgroundColor: '#FFF',
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
-    paddingHorizontal: 10,
   },
-  headerColumn: { width: 50, alignItems: 'center' },
+  headerRow: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerColumn: { width: 56, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  headerIconBtn: { padding: 10 },
-  dateText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  content: { padding: 15 },
+  headerIconBtn: { padding: 14, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  dateText: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  content: { padding: 16, paddingBottom: 100 },
   card: {
     backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 2,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -594,11 +601,14 @@ const styles = StyleSheet.create({
   recordBtn: {
     borderWidth: 1.5,
     borderColor: '#333',
-    paddingVertical: 6,
-    paddingHorizontal: 20,
-    borderRadius: 22
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 22,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  recordText: { fontSize: 16, fontWeight: 'bold' },
+  recordText: { fontSize: 14, fontWeight: 'bold' },
   exerciseListStats: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -639,13 +649,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
     borderRadius: 15,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
-    marginHorizontal: 5,
+    marginHorizontal: 4,
     borderWidth: 1,
-    borderColor: '#F1F3F5'
+    borderColor: '#F1F3F5',
+    minHeight: 70,
+    justifyContent: 'center',
   },
-  quickAddLabel: { fontSize: 14, fontWeight: 'bold', color: '#2196F3', marginTop: 5 },
+  quickAddLabel: { fontSize: 13, fontWeight: 'bold', color: '#2196F3', marginTop: 4 },
   quickAddSub: { fontSize: 10, color: '#999', marginTop: 2 },
   exerciseBonusNote: {
     fontSize: 11,
@@ -672,7 +684,9 @@ const styles = StyleSheet.create({
 });
 
 function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
-  const progress = Math.min(current / target, 1);
+  const safeTarget = target > 0 ? target : 1;
+  const progress = Math.min(Math.max(0, isFinite(current / safeTarget) ? current / safeTarget : 0), 1);
+
   return (
     <View style={styles.macroItem}>
       <View style={styles.macroHeader}>
@@ -692,8 +706,10 @@ function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, 
   const normalizedRadius = radius - stroke;
   const circumference = normalizedRadius * 2 * Math.PI;
 
-  const total = goal + exercise;
-  const remainingRatio = Math.max(remaining / total, 0);
+  const total = (goal || 0) + (exercise || 0);
+  const safeTotal = total > 0 ? total : 1;
+  const rawRatio = (remaining || 0) / safeTotal;
+  const remainingRatio = Math.max(0, Math.min(1, isFinite(rawRatio) ? rawRatio : 1));
 
   // Colors per user request
   const blueColor = "#2196F3";
@@ -711,7 +727,7 @@ function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, 
           cx={radius}
           cy={radius}
         />
-        {/* Step 2: Overlay Circle - Blue (The "Remaining" part) starting from 12 o'clock */}
+        {/* Step 2: Overlay Circle - Blue (The \"Remaining\" part) starting from 12 o'clock */}
         <Circle
           stroke={blueColor}
           fill="transparent"

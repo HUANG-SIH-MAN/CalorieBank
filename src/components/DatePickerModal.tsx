@@ -89,7 +89,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       web: {
-        boxShadow: '0px 10px 30px rgba(0,0,0,0.2)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 30,
+        elevation: 10,
       },
       default: {
         elevation: 5,

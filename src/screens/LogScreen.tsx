@@ -1,16 +1,8 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Image,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useAppContext } from '../context/AppContext';
 import { EXERCISE_TYPES } from '../constants/exercises';
 import DatePickerModal from '../components/DatePickerModal';
@@ -257,23 +249,25 @@ export default function LogScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <View style={styles.dateHeader}>
-        <TouchableOpacity onPress={() => changeDate(-1)} style={styles.headerIconBtn}>
-          <Ionicons name="chevron-back" size={24} color="#333" />
-        </TouchableOpacity>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => changeDate(-1)} style={styles.headerIconBtn}>
+            <Ionicons name="chevron-back" size={24} color="#333" />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setDatePickerVisible(true)}
-          style={styles.headerCenter}
-        >
-          <Text style={styles.headerTitle}>{formatDateDisplay(selectedDate)}</Text>
-          <Ionicons name="calendar-outline" size={18} color="#007AFF" style={{ marginLeft: 8 }} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setDatePickerVisible(true)}
+            style={styles.headerCenter}
+          >
+            <Text style={styles.headerTitle}>{formatDateDisplay(selectedDate)}</Text>
+            <Ionicons name="calendar-outline" size={18} color="#007AFF" style={{ marginLeft: 8 }} />
+          </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => changeDate(1)} style={styles.headerIconBtn}>
-          <Ionicons name="chevron-forward" size={24} color="#333" />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => changeDate(1)} style={styles.headerIconBtn}>
+            <Ionicons name="chevron-forward" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
@@ -331,27 +325,34 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFF',
-    padding: 5,
-    margin: 15,
-    borderRadius: 15,
-    boxShadow: '0px 2px 5px rgba(0,0,0,0.05)',
+    padding: 4,
+    margin: 16,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
+  tab: { flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 11, minHeight: 48, justifyContent: 'center' },
   activeTab: { backgroundColor: '#007AFF' },
-  tabText: { fontSize: 16, fontWeight: 'bold', color: '#666' },
+  tabText: { fontSize: 15, fontWeight: 'bold', color: '#666' },
   activeTabText: { color: '#FFF' },
-  scrollContent: { paddingHorizontal: 15, paddingBottom: 30 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 100 },
   tabContent: { flex: 1 },
   dateHeader: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingTop: Platform.OS === 'android' ? Constants.statusBarHeight : 0,
     backgroundColor: '#FFF',
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
-    paddingHorizontal: 10,
   },
-  headerIconBtn: { padding: 10 },
+  headerRow: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerIconBtn: { padding: 14, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   aiCard: {
     backgroundColor: '#66BB6A',
@@ -359,7 +360,11 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     marginBottom: 20,
-    boxShadow: '0px 8px 20px rgba(102, 187, 106, 0.3)',
+    shadowColor: '#66BB6A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 6,
   },
   aiIconWrapper: {
     width: 70,
@@ -376,10 +381,12 @@ const styles = StyleSheet.create({
   cameraBtn: {
     flexDirection: 'row',
     backgroundColor: '#FFF',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
     borderRadius: 30,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -436,9 +443,11 @@ const styles = StyleSheet.create({
   unitText: { fontSize: 14, color: '#999', marginLeft: 5 },
   addBtn: {
     backgroundColor: '#333',
-    paddingVertical: 15,
+    paddingVertical: 16,
     borderRadius: 15,
-    alignItems: 'center'
+    alignItems: 'center',
+    minHeight: 52,
+    justifyContent: 'center',
   },
   addBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   sectionHeader: { marginBottom: 15, paddingHorizontal: 5 },
@@ -524,12 +533,12 @@ const styles = StyleSheet.create({
   miniMacroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 },
   miniBarBg: { height: 3, backgroundColor: '#F2F2F7', borderRadius: 1.5, overflow: 'hidden' },
   miniBarFill: { height: '100%', borderRadius: 1.5 },
-  deleteBtn: { padding: 4 },
+  deleteBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });
 
 function MiniMacroBar({ label, value, goal, color }: { label: string, value: number, goal: number, color: string }) {
-  const percent = Math.round((value / goal) * 100);
-  const progress = Math.min(value / goal, 1);
+  const safeGoal = goal > 0 ? goal : 1;
+  const progress = Math.min(Math.max(0, isFinite(value / safeGoal) ? value / safeGoal : 0), 1);
 
   return (
     <View style={styles.miniMacroItem}>
@@ -545,7 +554,8 @@ function MiniMacroBar({ label, value, goal, color }: { label: string, value: num
 }
 
 function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
-  const progress = Math.min(current / target, 1);
+  const safeTarget = target > 0 ? target : 1;
+  const progress = Math.min(Math.max(0, isFinite(current / safeTarget) ? current / safeTarget : 0), 1);
   return (
     <View style={styles.macroItem}>
       <View style={styles.macroHeader}>

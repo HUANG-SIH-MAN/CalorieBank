@@ -5,12 +5,14 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Dimensions,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
+import Constants from 'expo-constants';
 import { WeightLog } from '../types';
 
 interface WeightHistoryModalProps {
@@ -32,27 +34,38 @@ export default function WeightHistoryModal({
     new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
-  // Prepare data for the 90-day chart
+  const screenWidth = Dimensions.get('window').width;
+  // chart width = screen - scrollPadding(20*2) - cardPadding(16*2) - extraSafety(10)
+  const chartWidth = screenWidth - 40 - 32 - 10;
+
+  // Prepare data for the chart
   const prepareChartData = () => {
     const now = new Date();
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(now.getDate() - 90);
 
-    // Filter logs for the last 90 days
     const recentLogs = weightLogs
       .filter(log => new Date(log.date) >= ninetyDaysAgo)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     if (recentLogs.length === 0) {
       return {
-        labels: [],
+        labels: [''],
         datasets: [{ data: [0] }]
       };
     }
 
-    // Since we might have many days, we pick a few labels to show
+    // For small datasets (< 8 points), show all labels
+    // For larger datasets, show max 5 labels evenly spaced
+    const maxLabels = 5;
     const labels = recentLogs.map((log, index) => {
-      if (index === 0 || index === recentLogs.length - 1 || index === Math.floor(recentLogs.length / 2)) {
+      if (recentLogs.length <= maxLabels) {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+      // Show first, last, and evenly spaced middle labels
+      const step = Math.floor(recentLogs.length / (maxLabels - 1));
+      if (index === 0 || index === recentLogs.length - 1 || (index % step === 0 && index + step < recentLogs.length)) {
         const d = new Date(log.date);
         return `${d.getMonth() + 1}/${d.getDate()}`;
       }
@@ -64,7 +77,7 @@ export default function WeightHistoryModal({
       datasets: [
         {
           data: recentLogs.map(log => log.weight),
-          color: (opacity = 1) => `rgba(102, 187, 106, ${opacity})`, // Green theme
+          color: (opacity = 1) => `rgba(102, 187, 106, ${opacity})`,
           strokeWidth: 2
         }
       ],
@@ -72,7 +85,6 @@ export default function WeightHistoryModal({
   };
 
   const chartData = prepareChartData();
-  const screenWidth = Dimensions.get('window').width;
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -81,16 +93,18 @@ export default function WeightHistoryModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-            <Ionicons name="chevron-back" size={28} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>體重</Text>
-          <TouchableOpacity onPress={onAddRecord} style={styles.headerBtn}>
-            <Ionicons name="add" size={32} color="#333" />
-          </TouchableOpacity>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
+              <Ionicons name="chevron-back" size={28} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>體重</Text>
+            <TouchableOpacity onPress={onAddRecord} style={styles.headerBtn}>
+              <Ionicons name="add" size={32} color="#333" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -102,27 +116,41 @@ export default function WeightHistoryModal({
             </View>
 
             {weightLogs.length > 0 ? (
-              <LineChart
-                data={chartData}
-                width={screenWidth - 60}
-                height={220}
-                chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
-                  decimalPlaces: 1,
-                  color: (opacity = 1) => `rgba(102, 187, 106, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
-                  style: { borderRadius: 16 },
-                  propsForDots: {
-                    r: '4',
-                    strokeWidth: '2',
-                    stroke: '#66BB6A'
-                  }
-                }}
-                bezier
-                style={styles.chart}
-              />
+              <View style={styles.chartContainer}>
+                <LineChart
+                  data={chartData}
+                  width={chartWidth}
+                  height={180}
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    decimalPlaces: 1,
+                    color: (opacity = 1) => `rgba(102, 187, 106, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
+                    propsForLabels: {
+                      fontSize: 10,
+                    },
+                    propsForDots: {
+                      r: '5',
+                      strokeWidth: '2',
+                      stroke: '#66BB6A'
+                    },
+                    propsForBackgroundLines: {
+                      strokeDasharray: '',
+                      stroke: '#F0F0F0',
+                      strokeWidth: 1,
+                    },
+                  }}
+                  bezier={true}
+                  withInnerLines={true}
+                  withOuterLines={false}
+                  withShadow={false}
+                  style={{ marginLeft: -16 }}
+                  segments={4}
+                  fromZero={false}
+                />
+              </View>
             ) : (
               <View style={styles.noData}>
                 <Text style={styles.noDataText}>尚無體重數據</Text>
@@ -136,7 +164,7 @@ export default function WeightHistoryModal({
             {sortedLogs.map((log) => (
               <View key={log.id} style={styles.recordItem}>
                 <Text style={styles.recordDate}>{formatDate(log.date)}</Text>
-                <Text style={styles.recordWeight}>{log.weight.toFixed(1)}千克</Text>
+                <Text style={styles.recordWeight}>{log.weight.toFixed(1)} kg</Text>
               </View>
             ))}
           </View>
@@ -149,41 +177,52 @@ export default function WeightHistoryModal({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   header: {
+    paddingTop: Platform.OS === 'android' ? Constants.statusBarHeight : 0,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EEE',
+  },
+  headerRow: {
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 15,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#EEE',
   },
-  headerBtn: { width: 44, alignItems: 'center' },
+  headerBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   scrollContent: { padding: 20 },
   chartCard: {
     backgroundColor: '#FFF',
-    borderRadius: 25,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 25,
-    boxShadow: '0px 4px 15px rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    overflow: 'hidden',
   },
-  chartHeader: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 20 },
-  chartTitle: { fontSize: 18, fontWeight: 'bold', marginRight: 8 },
+  chartContainer: {
+    overflow: 'hidden',
+    marginHorizontal: -4,
+  },
+  chartHeader: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
+  chartTitle: { fontSize: 17, fontWeight: 'bold', marginRight: 6 },
   chartSubtitle: { fontSize: 12, color: '#999' },
-  chart: { marginVertical: 8, borderRadius: 16 },
-  noData: { height: 200, justifyContent: 'center', alignItems: 'center' },
+  noData: { height: 180, justifyContent: 'center', alignItems: 'center' },
   noDataText: { color: '#999' },
   recordsSection: { marginBottom: 30 },
-  recordsTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 15, color: '#333' },
+  recordsTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#333' },
   recordItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: '#EEE',
   },
-  recordDate: { fontSize: 18, color: '#333' },
-  recordWeight: { fontSize: 18, color: '#333', fontWeight: '500' },
+  recordDate: { fontSize: 16, color: '#333' },
+  recordWeight: { fontSize: 16, color: '#333', fontWeight: '600' },
 });
