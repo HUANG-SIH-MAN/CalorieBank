@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,20 +20,13 @@ import { calculateDailyCalorieGoal } from '../utils/fitness';
 import { UserProfile } from '../types';
 import { validateGeminiKey } from '../services/geminiService';
 import * as SecureStore from 'expo-secure-store';
+import GeminiConfigModal from '../components/GeminiConfigModal';
 
 const SECURE_KEY = 'gemini_api_key';
 
 const getStoredKey = async () => {
   if (Platform.OS === 'web') return (global as any).__geminiKey || '';
   return (await SecureStore.getItemAsync(SECURE_KEY)) || '';
-};
-const saveStoredKey = async (key: string) => {
-  if (Platform.OS === 'web') { (global as any).__geminiKey = key; return; }
-  await SecureStore.setItemAsync(SECURE_KEY, key);
-};
-const deleteStoredKey = async () => {
-  if (Platform.OS === 'web') { (global as any).__geminiKey = ''; return; }
-  await SecureStore.deleteItemAsync(SECURE_KEY);
 };
 
 export default function SettingsScreen() {
@@ -42,58 +36,16 @@ export default function SettingsScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editProfile, setEditProfile] = useState<UserProfile | null>(null);
 
-  // API Key
+  // AI Settings
   const [apiKey, setApiKey] = useState('');
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [keyTesting, setKeyTesting] = useState(false);
-  const [keyEditMode, setKeyEditMode] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   useEffect(() => {
-    getStoredKey().then(k => {
-      setApiKey(k);
-      setApiKeyInput(k);
-    });
+    refreshKeyState();
   }, []);
 
-  const handleSaveKey = async () => {
-    const trimmed = apiKeyInput.trim();
-    if (!trimmed) {
-      Alert.alert('提示', '請輸入 API Key');
-      return;
-    }
-    await saveStoredKey(trimmed);
-    setApiKey(trimmed);
-    setKeyEditMode(false);
-    Alert.alert('已儲存', 'Gemini API Key 已安全儲存在裝置上');
-  };
-
-  const handleTestKey = async () => {
-    const trimmed = apiKeyInput.trim();
-    if (!trimmed) { Alert.alert('提示', '請先輸入 API Key'); return; }
-    setKeyTesting(true);
-    try {
-      await validateGeminiKey(trimmed);
-      Alert.alert('✅ 連線成功', 'API Key 有效，可以開始使用 AI 辨識功能！');
-    } catch (e: any) {
-      Alert.alert('❌ 連線失敗', e.message || 'API Key 無效，請確認後重試');
-    } finally {
-      setKeyTesting(false);
-    }
-  };
-
-  const handleDeleteKey = () => {
-    Alert.alert('刪除 API Key', '確定要刪除已儲存的 API Key 嗎？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '刪除', style: 'destructive', onPress: async () => {
-          await deleteStoredKey();
-          setApiKey('');
-          setApiKeyInput('');
-          setKeyEditMode(false);
-        }
-      },
-    ]);
+  const refreshKeyState = () => {
+    getStoredKey().then(k => setApiKey(k));
   };
 
   const startEditing = () => {
@@ -310,65 +262,25 @@ export default function SettingsScreen() {
 
         {/* Section: AI Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>AI 辨識設定</Text>
-          <View style={styles.card}>
-            <View style={styles.apiKeyHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <MaterialCommunityIcons name="robot-outline" size={24} color="#4CAF50" />
-                <View>
-                  <Text style={styles.apiKeyTitle}>Gemini API Key</Text>
-                  <Text style={styles.apiKeySubtitle}>
-                    {apiKey ? '✅ 已設定' : '⚠️ 尚未設定'}
-                  </Text>
-                </View>
+          <Text style={styles.sectionTitle}>AI 辨識系統</Text>
+          <TouchableOpacity
+            style={[styles.card, styles.aiCard]}
+            onPress={() => setShowConfigModal(true)}
+          >
+            <View style={styles.aiCardContent}>
+              <View style={styles.aiIconWrapper}>
+                <MaterialCommunityIcons name="robot" size={28} color="#FFF" />
               </View>
-              {apiKey && !keyEditMode && (
-                <TouchableOpacity onPress={() => setKeyEditMode(true)}>
-                  <Text style={styles.apiKeyEditBtn}>修改</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {(!apiKey || keyEditMode) && (
-              <View style={styles.apiKeyInputArea}>
-                <View style={styles.apiKeyInputRow}>
-                  <TextInput
-                    style={styles.apiKeyInput}
-                    value={apiKeyInput}
-                    onChangeText={setApiKeyInput}
-                    placeholder="貼上您的 Gemini API Key"
-                    placeholderTextColor="#BBB"
-                    secureTextEntry={!showKey}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowKey(v => !v)} style={styles.eyeBtn}>
-                    <Ionicons name={showKey ? 'eye-off-outline' : 'eye-outline'} size={22} color="#999" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.apiKeyHint}>
-                  前往 aistudio.google.com 免費申請，每天 1,500 次請求
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiTitle}>Gemini AI 設定</Text>
+                <Text style={styles.aiStatus}>
+                  {apiKey ? `● 已連線 (${userProfile.geminiModel || 'Flash'})` : '○ 尚未配置 (點擊設定)'}
                 </Text>
-                <View style={styles.apiKeyBtnRow}>
-                  <TouchableOpacity style={styles.testBtn} onPress={handleTestKey} disabled={keyTesting}>
-                    {keyTesting
-                      ? <ActivityIndicator size="small" color="#4CAF50" />
-                      : <><Ionicons name="wifi-outline" size={16} color="#4CAF50" /><Text style={styles.testBtnText}>測試連線</Text></>
-                    }
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.saveKeyBtn} onPress={handleSaveKey}>
-                    <Text style={styles.saveKeyBtnText}>儲存</Text>
-                  </TouchableOpacity>
-                </View>
-                {apiKey && keyEditMode && (
-                  <TouchableOpacity style={styles.deleteKeyBtn} onPress={handleDeleteKey}>
-                    <Ionicons name="trash-outline" size={16} color="#F44336" />
-                    <Text style={styles.deleteKeyBtnText}>刪除現有 Key</Text>
-                  </TouchableOpacity>
-                )}
               </View>
-            )}
-          </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
         </View>
 
         {isEditing && (
@@ -378,6 +290,15 @@ export default function SettingsScreen() {
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <GeminiConfigModal
+        visible={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+        onSuccess={() => {
+          setShowConfigModal(false);
+          refreshKeyState();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -503,65 +424,23 @@ const styles = StyleSheet.create({
   cancelBtn: { marginTop: 20, padding: 15, alignItems: 'center' },
   cancelBtnText: { color: '#FF3B30', fontSize: 16 },
 
-  // AI Section
-  apiKeyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 18,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#F0F0F0',
-  },
-  apiKeyTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  apiKeySubtitle: { fontSize: 13, color: '#999', marginTop: 2 },
-  apiKeyEditBtn: { color: '#007AFF', fontSize: 14, fontWeight: '600' },
-  apiKeyInputArea: { padding: 18, backgroundColor: '#FAFAFA' },
-  apiKeyInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DDD',
-    paddingHorizontal: 12,
-  },
-  apiKeyInput: {
-    flex: 1,
+  // AI Card in Settings
+  aiCard: { padding: 20 },
+  aiCardContent: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  aiIconWrapper: {
+    width: 48,
     height: 48,
-    fontSize: 15,
-    color: '#333',
-  },
-  eyeBtn: { padding: 8 },
-  apiKeyHint: { fontSize: 12, color: '#999', marginTop: 10, lineHeight: 18 },
-  apiKeyBtnRow: { flexDirection: 'row', gap: 12, marginTop: 15 },
-  testBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-    borderRadius: 12,
-    height: 44,
-  },
-  testBtnText: { color: '#4CAF50', fontWeight: 'bold' },
-  saveKeyBtn: {
-    flex: 1,
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 44,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  saveKeyBtnText: { color: '#FFF', fontWeight: 'bold' },
-  deleteKeyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 15,
-    paddingVertical: 10,
-  },
-  deleteKeyBtnText: { color: '#F44336', fontSize: 14, fontWeight: '500' },
+  aiTitle: { fontSize: 17, fontWeight: 'bold', color: '#333' },
+  aiStatus: { fontSize: 13, color: '#999', marginTop: 4 },
+  aiHint: { fontSize: 11, color: '#BBB', marginTop: 10, paddingHorizontal: 10, lineHeight: 16 },
 });

@@ -27,6 +27,7 @@ export interface UserProfile {
   favoriteExerciseIds?: string[];
   customExercises?: ExerciseType[];
   stepGoal?: number;
+  geminiModel?: string;
 }
 
 export interface FoodLog {

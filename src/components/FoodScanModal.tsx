@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -17,21 +17,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as SecureStore from 'expo-secure-store';
-import { API_KEY as ENV_API_KEY } from '@env';
 import { analyzeFoodImage, FoodAnalysisResult } from '../services/geminiService';
 import { useAppContext } from '../context/AppContext';
 import { calculateMacroGoals } from '../utils/fitness';
+import GeminiConfigModal from './GeminiConfigModal';
 
 const SECURE_KEY = 'gemini_api_key';
-
-// SecureStore is not available on web — fallback to in-memory for preview
-const getKey = async (): Promise<string> => {
-  if (Platform.OS === 'web') {
-    return (global as any).__geminiKey || ENV_API_KEY || '';
-  }
-  const saved = await SecureStore.getItemAsync(SECURE_KEY);
-  return saved || ENV_API_KEY || '';
-};
 
 interface FoodScanModalProps {
   visible: boolean;
@@ -45,6 +36,7 @@ type Stage = 'idle' | 'analyzing' | 'result' | 'manual';
 export default function FoodScanModal({ visible, onClose, onConfirm, date }: FoodScanModalProps) {
   const { userProfile } = useAppContext();
   const [stage, setStage] = useState<Stage>('idle');
+  const [showConfig, setShowConfig] = useState(false);
 
   const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
   const macroGoals = calculateMacroGoals(
@@ -114,11 +106,11 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
     const asset = pickerResult.assets[0];
 
-    // Compress to ≤ 800px wide to keep under Gemini's size limit
+    // Compress to ≤ 1024px wide for better detail
     const manipulated = await ImageManipulator.manipulateAsync(
       asset.uri,
-      [{ resize: { width: 800 } }],
-      { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      [{ resize: { width: 1024 } }],
+      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
 
     setImageUri(manipulated.uri);
@@ -133,21 +125,26 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const doAnalyze = async () => {
     if (!imageBase64) return;
 
-    const apiKey = await getKey();
+    // Check if key is configured
+    let apiKey = '';
+    if (Platform.OS === 'web') {
+      apiKey = (global as any).__geminiKey || '';
+    } else {
+      apiKey = await SecureStore.getItemAsync(SECURE_KEY) || '';
+    }
+
     if (!apiKey) {
-      Alert.alert(
-        '尚未設定 API Key',
-        '請先到「設定」頁面輸入您的 Gemini API Key',
-        [{ text: '確定' }]
-      );
+      setShowConfig(true);
       return;
     }
+
+    const modelName = userProfile?.geminiModel || 'gemini-1.5-flash';
 
     setStage('analyzing');
     setErrorMsg('');
 
     try {
-      const res = await analyzeFoodImage(imageBase64, imageMime, apiKey, hints);
+      const res = await analyzeFoodImage(imageBase64, imageMime, apiKey, modelName, hints);
       setResult(res);
       setEditName(res.name);
       setEditCalories(res.calories.toString());
@@ -440,25 +437,36 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   );
 
   return (
-    <Modal visible={visible} animationType="slide" statusBarTranslucent>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
-            <Ionicons name="close" size={28} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {stage === 'manual' ? '手動輸入' : 'AI 辨識食物'}
-          </Text>
-          <View style={styles.headerBtn} />
-        </View>
+    <>
+      <Modal visible={visible} animationType="slide" statusBarTranslucent>
+        <SafeAreaView style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
+              <Ionicons name="close" size={28} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>
+              {stage === 'manual' ? '手動輸入' : 'AI 辨識食物'}
+            </Text>
+            <View style={styles.headerBtn} />
+          </View>
 
-        {stage === 'idle' && renderIdle()}
-        {stage === 'analyzing' && renderAnalyzing()}
-        {stage === 'result' && renderResult()}
-        {stage === 'manual' && renderManual()}
-      </SafeAreaView>
-    </Modal>
+          {stage === 'idle' && renderIdle()}
+          {stage === 'analyzing' && renderAnalyzing()}
+          {stage === 'result' && renderResult()}
+          {stage === 'manual' && renderManual()}
+        </SafeAreaView>
+      </Modal>
+
+      <GeminiConfigModal
+        visible={showConfig}
+        onClose={() => setShowConfig(false)}
+        onSuccess={() => {
+          setShowConfig(false);
+          doAnalyze();
+        }}
+      />
+    </>
   );
 }
 

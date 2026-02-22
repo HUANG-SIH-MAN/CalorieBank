@@ -1,6 +1,4 @@
-import { API_KEY as ENV_API_KEY, MODEL_NAME as ENV_MODEL_NAME } from '@env';
-
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+import { GoogleGenAI } from "@google/genai";
 
 export interface FoodAnalysisResult {
   name: string;
@@ -11,116 +9,133 @@ export interface FoodAnalysisResult {
 }
 
 /**
- * Analyze a food photo using Gemini Vision API.
+ * Analyze a food photo using the @google/genai SDK.
  * @param base64Image - Base64-encoded image (without data URI prefix)
  * @param mimeType   - e.g. 'image/jpeg'
- * @param apiKey     - User's Gemini API key
- * @param hints      - Optional keywords the user provides (e.g. '牛肉麵, 大碗')
+ * @param apiKey     - User's Gemini API key (required)
+ * @param modelName  - Gemini model name (required, e.g. 'gemini-1.5-flash')
+ * @param hints      - Optional keywords the user provides
  */
 export async function analyzeFoodImage(
   base64Image: string,
   mimeType: string,
   apiKey: string,
+  modelName: string,
   hints: string = ''
 ): Promise<FoodAnalysisResult> {
+  const rawKey = (apiKey || '').trim();
+  const finalApiKey = rawKey.replace(/[^\x20-\x7E]/g, ''); 
+
+  if (!finalApiKey) {
+    throw new Error('未偵測到 API Key。');
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: finalApiKey,
+  });
+
   const hintLine = hints.trim()
-    ? `\n用戶補充說明：${hints.trim()}，請根據此資訊調整估算。`
+    ? `\n用戶提供的補充資訊：${hints.trim()}。`
     : '';
 
-  const prompt = `你是一位專業的營養師，請分析這張食物照片。
-請估算圖中所有食物（以一人份為單位）的營養成分。${hintLine}
-請以 JSON 格式回傳，格式如下：
-{
-  "name": "食物名稱（繁體中文）",
-  "calories": 數字（大卡，整數）,
-  "protein": 數字（克，整數）,
-  "carbs": 數字（克，整數）,
-  "fat": 數字（克，整數）
-}
-只回傳 JSON，不要有其他文字或 markdown 格式。`;
+  const prompt = `你是一位專業且直覺敏銳的營養師。請分析這張食物照片並完成以下任務：
+1. 辨識照片中的主要食物與配菜。
+2. 即使照片不完全清晰或你不確定，也請根據常見菜色的平均值給出「最可能的估算」。
+3. 嚴禁回傳 0 kcal 或 未知食物（除非圖片完全與食物無關）。
+4. 以一人份為估算基準。${hintLine}
 
-  const model = ENV_MODEL_NAME || 'gemini-1.5-flash';
-  const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey || ENV_API_KEY}`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+請嚴格以 JSON 格式回傳（數字部分請給整數）：
+{
+  "name": "食物名稱（例如：紅燒獅子頭、番茄牛肉麵）",
+  "calories": 大卡,
+  "protein": 蛋白質克數,
+  "carbs": 碳水化合物克數,
+  "fat": 脂肪克數
+}
+只回傳 JSON。`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
       contents: [
         {
+          role: "user",
           parts: [
             { text: prompt },
             {
-              inline_data: {
-                mime_type: mimeType,
+              inlineData: {
+                mimeType: mimeType,
                 data: base64Image,
               },
             },
           ],
         },
       ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 256,
-      },
-    }),
-  });
+      config: {
+        // @ts-ignore
+        responseMimeType: "application/json",
+      }
+    });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const msg = (err as any)?.error?.message || `HTTP ${response.status}`;
-    throw new Error(msg);
+    const text = response.text || "";
+    if (!text) throw new Error("AI 未能產生內容");
+
+    let parsed: any;
+    try {
+      const cleaned = text.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      throw new Error('AI 回傳格式不正確');
+    }
+
+    return {
+      name: parsed.name || '未知食物',
+      calories: Math.round(parsed.calories || 0),
+      protein: Math.round(parsed.protein || 0),
+      carbs: Math.round(parsed.carbs || 0),
+      fat: Math.round(parsed.fat || 0),
+    };
+  } catch (error: any) {
+    console.error('Gemini Analysis Error:', error);
+    
+    const errorString = error?.message || '';
+    
+    if (errorString.includes('503') || errorString.includes('high demand') || errorString.includes('UNAVAILABLE')) {
+      throw new Error('AI 目前使用人數過多（已達上限），請稍後再試。');
+    }
+    
+    if (errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error('已達到 API 呼叫頻率限制，請稍候重試。');
+    }
+
+    if (errorString.includes('API_KEY_INVALID') || errorString.includes('403') || errorString.includes('not found')) {
+      throw new Error('API Key 無效或型號名稱錯誤，請至設定檢查。');
+    }
+
+    const errorMsg = error?.message || 'AI 辨識失敗，請檢查網路或 API Key';
+    throw new Error(errorMsg);
   }
-
-  const data = await response.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-
-  // Strip possible markdown code fences
-  const cleaned = text.replace(/```json|```/g, '').trim();
-
-  let parsed: FoodAnalysisResult;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error('AI 回傳格式不正確，請重新辨識');
-  }
-
-  // Validate required fields
-  if (
-    typeof parsed.name !== 'string' ||
-    typeof parsed.calories !== 'number'
-  ) {
-    throw new Error('AI 無法辨識此食物，請補充關鍵字後重試');
-  }
-
-  return {
-    name: parsed.name,
-    calories: Math.round(parsed.calories || 0),
-    protein: Math.round(parsed.protein || 0),
-    carbs: Math.round(parsed.carbs || 0),
-    fat: Math.round(parsed.fat || 0),
-  };
 }
 
 /**
- * Quickly validate an API key by sending a simple text request.
+ * Quickly validate an API key and model.
  */
-export async function validateGeminiKey(apiKey: string): Promise<void> {
-  const model = ENV_MODEL_NAME || 'gemini-1.5-flash';
-  const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey || ENV_API_KEY}`;
+export async function validateGeminiKey(apiKey: string, modelName: string): Promise<void> {
+  const rawKey = (apiKey || '').trim();
+  const finalApiKey = rawKey.replace(/[^\x20-\x7E]/g, '');
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: '回覆 OK' }] }],
-      generationConfig: { maxOutputTokens: 5 },
-    }),
-  });
+  if (!finalApiKey) throw new Error('API Key 不能為空');
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const msg = (err as any)?.error?.message || 'API Key 無效';
-    throw new Error(msg);
+  const ai = new GoogleGenAI({ apiKey: finalApiKey });
+
+  try {
+    await ai.models.generateContent({
+      model: modelName,
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+    });
+  } catch (error: any) {
+    const msg = error?.message || '';
+    if (msg.includes('not found')) throw new Error('找不到該型號名稱，請確認輸入是否正確。');
+    throw new Error(msg || 'API Key 無效');
   }
 }
