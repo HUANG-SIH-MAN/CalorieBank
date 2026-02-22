@@ -691,7 +691,7 @@ function MacroProgress({ label, current, target, color }: { label: string, curre
     <View style={styles.macroItem}>
       <View style={styles.macroHeader}>
         <Text style={styles.macroLabel}>{label}</Text>
-        <Text style={styles.macroValue}>{Math.round(current)} / {target}g</Text>
+        <Text style={styles.macroValue}>{Math.round(current)}/{target}g</Text>
       </View>
       <View style={styles.macroBarBg}>
         <View style={[styles.macroBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
