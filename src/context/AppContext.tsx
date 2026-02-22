@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog } from '../types';
 
 interface AppContextType {
@@ -17,6 +19,7 @@ interface AppContextType {
   deleteWaterLog: (id: string) => void;
   addExerciseLog: (log: Omit<ExerciseLog, 'id'>) => void;
   deleteExerciseLog: (id: string) => void;
+  resetAppData: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -126,6 +129,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await AsyncStorage.setItem(STORAGE_KEYS.EXERCISE_LOGS, JSON.stringify(updated));
   };
 
+  const resetAppData = async () => {
+    try {
+      // Clear AsyncStorage
+      const allKeys = Object.values(STORAGE_KEYS);
+      await AsyncStorage.multiRemove(allKeys);
+
+      // Clear SecureStore
+      if (Platform.OS !== 'web') {
+        await SecureStore.deleteItemAsync('gemini_api_key');
+      } else {
+        (global as any).__geminiKey = '';
+      }
+
+      // Reset States
+      setProfileState(null);
+      setFoodLogs([]);
+      setWeightLogs([]);
+      setWaterLogs([]);
+      setExerciseLogs([]);
+    } catch (error) {
+      console.error('Failed to reset app data', error);
+      throw error;
+    }
+  };
+
   const value = useMemo(() => ({
     userProfile,
     foodLogs,
@@ -141,6 +169,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteWaterLog,
     addExerciseLog,
     deleteExerciseLog,
+    resetAppData,
     isLoading,
   }), [userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, isLoading]);
 

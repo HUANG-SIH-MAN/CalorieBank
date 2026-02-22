@@ -30,7 +30,7 @@ const getStoredKey = async () => {
 };
 
 export default function SettingsScreen() {
-  const { userProfile, setUserProfile } = useAppContext();
+  const { userProfile, setUserProfile, resetAppData } = useAppContext();
 
   // Profile editing
   const [isEditing, setIsEditing] = useState(false);
@@ -46,6 +46,24 @@ export default function SettingsScreen() {
 
   const refreshKeyState = () => {
     getStoredKey().then(k => setApiKey(k));
+  };
+
+  const handleResetApp = () => {
+    Alert.alert(
+      '重置所有數據',
+      '這將會刪除您所有的飲食紀錄、體重資料以及 AI 設定，且無法復原。您確定要這麼做嗎？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '確定刪除',
+          style: 'destructive',
+          onPress: async () => {
+            await resetAppData();
+            Alert.alert('已重置', '所有數據已清除，App 將回到初始狀態。');
+          }
+        },
+      ]
+    );
   };
 
   const startEditing = () => {
@@ -283,6 +301,23 @@ export default function SettingsScreen() {
           <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
         </View>
 
+        {/* Section: Danger Zone */}
+        <View style={[styles.section, { marginTop: 20 }]}>
+          <Text style={[styles.sectionTitle, { color: '#FF3B30' }]}>危險區域</Text>
+          <TouchableOpacity
+            style={[styles.card, styles.dangerCard]}
+            onPress={handleResetApp}
+          >
+            <View style={styles.itemRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                <Text style={styles.dangerText}>刪除所有資料並登出</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#FF3B30" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {isEditing && (
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsEditing(false)}>
             <Text style={styles.cancelBtnText}>取消編輯</Text>
@@ -443,4 +478,6 @@ const styles = StyleSheet.create({
   aiTitle: { fontSize: 17, fontWeight: 'bold', color: '#333' },
   aiStatus: { fontSize: 13, color: '#999', marginTop: 4 },
   aiHint: { fontSize: 11, color: '#BBB', marginTop: 10, paddingHorizontal: 10, lineHeight: 16 },
+  dangerCard: { borderColor: '#FFEBEB', borderWidth: 1 },
+  dangerText: { fontSize: 16, color: '#FF3B30', fontWeight: '500' },
 });

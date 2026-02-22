@@ -139,3 +139,36 @@ export async function validateGeminiKey(apiKey: string, modelName: string): Prom
     throw new Error(msg || 'API Key 無效');
   }
 }
+
+/**
+ * List available models for the given API key.
+ * Note: Model listing often requires different permissions or might be restricted.
+ * We'll attempt to fetch them using the REST API for maximum compatibility.
+ */
+export async function listAvailableModels(apiKey: string): Promise<{ id: string; name: string }[]> {
+  const rawKey = (apiKey || '').trim();
+  const finalApiKey = rawKey.replace(/[^\x20-\x7E]/g, '');
+  
+  if (!finalApiKey) throw new Error('API Key 不能為空');
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${finalApiKey}`
+    );
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message || '無法取得模型列表');
+    }
+
+    return (data.models || [])
+      .filter((m: any) => m.supportedGenerationMethods.includes('generateContent'))
+      .map((m: any) => ({
+        id: m.name.replace('models/', ''),
+        name: m.displayName || m.name,
+      }));
+  } catch (error: any) {
+    console.error('List Models Error:', error);
+    throw error;
+  }
+}

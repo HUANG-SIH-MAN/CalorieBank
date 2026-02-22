@@ -51,6 +51,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const [result, setResult] = useState<FoodAnalysisResult | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [imageRatio, setImageRatio] = useState(1);
 
   // Editable result fields
   const [editName, setEditName] = useState('');
@@ -106,15 +107,21 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
     const asset = pickerResult.assets[0];
 
-    // Compress to ≤ 1024px wide for better detail
+    if (asset.width && asset.height) {
+      setImageRatio(asset.width / asset.height);
+    }
+
+    // Compress to ≤ 1024px wide for AI analysis
     const manipulated = await ImageManipulator.manipulateAsync(
       asset.uri,
       [{ resize: { width: 1024 } }],
       { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
 
-    setImageUri(manipulated.uri);
-    setImageBase64(manipulated.base64 || null);
+    const b64 = manipulated.base64 || '';
+    // Use base64 data URI for display (file URIs may not be accessible on some Android devices)
+    setImageUri(`data:image/jpeg;base64,${b64}`);
+    setImageBase64(b64 || null);
     setImageMime('image/jpeg');
     setRetryCount(0);
     setErrorMsg('');
@@ -216,7 +223,12 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       {/* Photo Area */}
       {imageUri ? (
         <View style={styles.photoContainer}>
-          <Image source={{ uri: imageUri }} style={styles.photo} resizeMode="cover" />
+          <Image
+            key={imageUri.substring(0, 50)}
+            source={{ uri: imageUri }}
+            style={[styles.photo, { aspectRatio: imageRatio || 1 }]}
+            resizeMode="cover"
+          />
           <TouchableOpacity style={styles.retakeBtn} onPress={() => { setImageUri(null); setImageBase64(null); }}>
             <Ionicons name="refresh" size={18} color="#FFF" />
             <Text style={styles.retakeBtnText}>重新選圖</Text>
@@ -293,7 +305,14 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
   const renderAnalyzing = () => (
     <View style={styles.loadingContainer}>
-      {imageUri && <Image source={{ uri: imageUri }} style={styles.photoSmall} resizeMode="cover" />}
+      {imageUri && (
+        <Image
+          key={imageUri.substring(0, 50)}
+          source={{ uri: imageUri }}
+          style={[styles.photoSmall, { aspectRatio: imageRatio || 1 }]}
+          resizeMode="contain"
+        />
+      )}
       <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 30 }} />
       <Text style={styles.loadingText}>AI 辨識中…</Text>
       <Text style={styles.loadingSubText}>
@@ -303,8 +322,15 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   );
 
   const renderResult = () => (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
-      {imageUri && <Image source={{ uri: imageUri }} style={styles.photoSmall} resizeMode="cover" />}
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      {imageUri && (
+        <Image
+          key={imageUri.substring(0, 50)}
+          source={{ uri: imageUri }}
+          style={[styles.photoSmall, { aspectRatio: imageRatio || 1 }]}
+          resizeMode="contain"
+        />
+      )}
 
       <View style={styles.resultCard}>
         <View style={styles.resultHeader}>
@@ -341,6 +367,30 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           unit="g"
           proportion={parseInt(editFat) / macroGoals.fat}
         />
+      </View>
+
+      {/* Retry with hints */}
+      <View style={styles.hintsCard}>
+        <Text style={styles.hintsLabel}>💡 補充提示（重新辨識時使用）</Text>
+        <TextInput
+          style={styles.hintsInput}
+          placeholder="例如：這是韓式石鍋拌飯、份量偏大..."
+          placeholderTextColor="#BBB"
+          value={hints}
+          onChangeText={setHints}
+          returnKeyType="done"
+        />
+        <View style={styles.tagRow}>
+          {['大碗', '小份', '半份', '加蛋', '少油'].map(tag => (
+            <TouchableOpacity
+              key={tag}
+              style={styles.tag}
+              onPress={() => setHints(h => h ? `${h}、${tag}` : tag)}
+            >
+              <Text style={styles.tagText}>{tag}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <View style={styles.resultActionsRow}>
@@ -517,8 +567,8 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 40 },
 
   // Photo
-  photoContainer: { borderRadius: 20, overflow: 'hidden', marginBottom: 16 },
-  photo: { width: '100%', height: 240 },
+  photoContainer: { borderRadius: 20, overflow: 'hidden', marginBottom: 16, backgroundColor: '#F0F0F0' },
+  photo: { width: '100%' },
   retakeBtn: {
     position: 'absolute',
     bottom: 10,
@@ -562,9 +612,9 @@ const styles = StyleSheet.create({
   pickBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
   photoSmall: {
     width: '100%',
-    height: 160,
     borderRadius: 16,
     marginBottom: 16,
+    backgroundColor: '#F0F0F0',
   },
 
   // Error

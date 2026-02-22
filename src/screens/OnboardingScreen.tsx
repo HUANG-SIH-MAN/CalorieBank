@@ -6,6 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,11 +35,11 @@ export default function OnboardingScreen() {
   const calculateGoal = () => {
     return calculateDailyCalorieGoal({
       gender,
-      weight: parseFloat(weight),
-      height: parseFloat(height),
-      age: parseFloat(age),
+      weight: parseFloat(weight) || 0,
+      height: parseFloat(height) || 0,
+      age: parseFloat(age) || 0,
       activityLevel,
-      goalWeight: parseFloat(goalWeight),
+      goalWeight: parseFloat(goalWeight) || 0,
       speedId: speed,
     });
   };
@@ -45,11 +48,11 @@ export default function OnboardingScreen() {
     const dailyCalorieGoal = calculateGoal();
     const profile: UserProfile = {
       name: 'User',
-      age: parseInt(age),
+      age: parseInt(age) || 25,
       gender: gender as any,
-      height: parseFloat(height),
-      weight: parseFloat(weight),
-      goalWeight: parseFloat(goalWeight),
+      height: parseFloat(height) || 175,
+      weight: parseFloat(weight) || 70,
+      goalWeight: parseFloat(goalWeight) || 70,
       activityLevel: activityLevel as any,
       weightChangeSpeed: speed as any,
       dailyCalorieGoal,
@@ -183,29 +186,39 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.progressHeader}>
-        <View style={[styles.progressBar, { width: `${(step / totalSteps) * 100}%` }]} />
-      </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.progressHeader}>
+          <View style={[styles.progressBar, { width: `${(step / totalSteps) * 100}%` }]} />
+        </View>
 
-      <View style={styles.content}>
-        {renderStep()}
-      </View>
-
-      <View style={styles.footer}>
-        {step > 1 && (
-          <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
-            <Text style={styles.backBtnText}>上一步</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.nextBtn}
-          onPress={() => step < totalSteps ? setStep(step + 1) : handleFinish()}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.nextBtnText}>{step === totalSteps ? '開始管理' : '下一步'}</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+          {renderStep()}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          {step > 1 && (
+            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
+              <Text style={styles.backBtnText}>上一步</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.nextBtn}
+            onPress={() => step < totalSteps ? setStep(step + 1) : handleFinish()}
+          >
+            <Text style={styles.nextBtnText}>{step === totalSteps ? '開始管理' : '下一步'}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -213,7 +226,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
   progressHeader: { height: 6, backgroundColor: '#EEE', width: '100%' },
   progressBar: { height: '100%', backgroundColor: '#007AFF' },
-  content: { flex: 1, padding: 30 },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 30, paddingBottom: 50 },
   stepContainer: { flex: 1 },
   title: { fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: '#1A1A1A' },
   subtitle: { fontSize: 16, color: '#666', marginBottom: 30 },

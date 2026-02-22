@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
-import { validateGeminiKey } from '../services/geminiService';
+import { validateGeminiKey, listAvailableModels } from '../services/geminiService';
 import { useAppContext } from '../context/AppContext';
 
 const SECURE_KEY = 'gemini_api_key';
@@ -27,19 +27,21 @@ interface GeminiConfigModalProps {
 }
 
 const PRESET_MODELS = [
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (推薦：速度快、免費額度高)' },
-  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp (最新測試版)' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (辨識力最強、但較慢)' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (最新穩定版，強烈推薦)' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (極速版)' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (深度辨識，處理慢)' },
 ];
 
 export default function GeminiConfigModal({ visible, onClose, onSuccess }: GeminiConfigModalProps) {
   const { userProfile, setUserProfile } = useAppContext();
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState(userProfile?.geminiModel || 'gemini-1.5-flash');
+  const [selectedModel, setSelectedModel] = useState(userProfile?.geminiModel || 'gemini-2.5-flash');
   const [customModel, setCustomModel] = useState('');
   const [isCustomModel, setIsCustomModel] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [dynamicModels, setDynamicModels] = useState<{ id: string; name: string }[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -96,6 +98,19 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
 
   const openAIStudio = () => {
     Linking.openURL('https://aistudio.google.com/app/apikey');
+  };
+
+  const fetchModels = async () => {
+    if (!apiKey) return;
+    setIsFetchingModels(true);
+    try {
+      const models = await listAvailableModels(apiKey);
+      setDynamicModels(models);
+    } catch (e: any) {
+      Alert.alert('取得清單失敗', e.message || '請確認 API Key 是否正確');
+    } finally {
+      setIsFetchingModels(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -162,12 +177,24 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
 
   const renderStep3 = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContainer}>
-      <Text style={styles.stepTitle}>步驟 2：選擇 AI 型號</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 }}>
+        <Text style={styles.stepTitle}>步驟 2：選擇 AI 型號</Text>
+        <TouchableOpacity onPress={fetchModels} disabled={isFetchingModels} style={styles.refreshBtn}>
+          {isFetchingModels ? (
+            <ActivityIndicator size="small" color="#007AFF" />
+          ) : (
+            <Ionicons name="refresh" size={18} color="#007AFF" />
+          )}
+          <Text style={styles.refreshBtnText}>刷新清單</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={styles.stepDesc}>
-        選擇您想使用的 Gemini 模型版本。通常 Flash 版本速度最快。
+        選擇您想使用的 Gemini 模型版本。一般建議使用最新的 Flash 版本。
       </Text>
 
       <View style={styles.modelList}>
+        {/* Presets */}
         {PRESET_MODELS.map(model => (
           <TouchableOpacity
             key={model.id}
@@ -188,6 +215,34 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
           </TouchableOpacity>
         ))}
 
+        {/* Dynamic Models from API */}
+        {dynamicModels.length > 0 && <Text style={styles.dynamicHeader}>從您的帳號發現可用型號：</Text>}
+        {dynamicModels
+          .filter(m => !PRESET_MODELS.some(pm => pm.id === m.id)) // Hide presets from dynamic list
+          .slice(0, 5) // Limit to top 5 to avoid overcrowding
+          .map(model => (
+            <TouchableOpacity
+              key={model.id}
+              style={[styles.modelItem, selectedModel === model.id && !isCustomModel && styles.modelItemSelected]}
+              onPress={() => {
+                setSelectedModel(model.id);
+                setIsCustomModel(false);
+              }}
+            >
+              <Ionicons
+                name={selectedModel === model.id && !isCustomModel ? "radio-button-on" : "radio-button-off"}
+                size={20}
+                color={selectedModel === model.id && !isCustomModel ? "#007AFF" : "#999"}
+              />
+              <View>
+                <Text style={[styles.modelName, selectedModel === model.id && !isCustomModel && styles.modelNameSelected]}>
+                  {model.id}
+                </Text>
+                <Text style={{ fontSize: 10, color: '#999' }}>{model.name}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+
         <TouchableOpacity
           style={[styles.modelItem, isCustomModel && styles.modelItemSelected]}
           onPress={() => setIsCustomModel(true)}
@@ -203,7 +258,7 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
         {isCustomModel && (
           <TextInput
             style={styles.textInputSmall}
-            placeholder="例如: gemini-2.0-flash-exp"
+            placeholder="例如: gemini-2.0-pro-exp-02-05"
             value={customModel}
             onChangeText={setCustomModel}
             autoCapitalize="none"
@@ -408,5 +463,27 @@ const styles = StyleSheet.create({
   modelNameSelected: {
     color: '#007AFF',
     fontWeight: 'bold',
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F7FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  refreshBtnText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  dynamicHeader: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#999',
+    marginTop: 15,
+    marginBottom: 8,
+    marginLeft: 4,
   },
 });

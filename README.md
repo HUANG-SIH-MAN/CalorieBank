@@ -1,53 +1,77 @@
 # CalorieBank (卡路里銀行) 🏦
 
-一個基於 React Native + Expo 開發的專業卡路里計算與體重管理應用程序。
+一個基於 React Native + Expo 開發的專業、私密且強大的卡路里與健康管理應用程序。
 
-## 🌟 核心理念
-CalorieBank 像管理銀行帳戶一樣管理您的健康，讓您對每日的卡路里收支一目瞭然。
+## 🌟 核心理念 - 「你的數據，你來做主」
+CalorieBank 不僅是你的健康帳務員，更是你的隱私守護者。我們採取 **Local-First (本地優先)** 與 **去中心化 AI** 架構，確保您的生理與飲食數據完全保存在您的設備中，不經過我們的伺服器。
 
-## 🚀 主要功能 (開發中)
-- **卡路里預算管理**：即時計算每日剩餘可攝取量。
-- **飲食追蹤**：詳細記錄早、午、晚、點心的攝取細節（熱量、蛋白質、碳水、脂肪）。
-- **體重追蹤**：圖表化呈現體重變化趨勢。
-- **個人化目標**：根據身高、體重、年齡及活動強度自動計算每日需求。
-- **數據持久化**：所有數據儲存於手機本地，保護隱私且離線可用。
+## 🚀 核心功能
+- **🥗 AI 食物影像辨識**：首創「自備 API Key」模式，串接 Google Gemini 2.0/1.5 模型。拍照即可辨識食物成分、熱量及三大營養素。
+- **📊 專業級數據分析**：
+    - **7 天趨勢視圖**：即時分析攝入、運動與營養比例。
+    - **90 天體重趨勢**：採用 Smooth Bezier Curve (平滑貝茲曲線) 動態追蹤體重變化。
+- **🎯 精準熱量銀行**：根據 Mifflin-St Jeor 公式動態計算每日 TDEE，讓你像管理銀行帳戶一樣管理每日卡路里收支。
+- **⚙️ 去中心化 AI 設定**：用戶可自由選擇 Gemini 模型型號（如 Gemini 1.5 Flash 或 Pro），並管理自己的 API 指令。
+- **🔐 隱私與安全**：所有數據儲存在本地 `AsyncStorage`，API Key 加密儲存於 `SecureStore`，並計畫支援 **Google Drive 雲端同步備份**。
 
 ## 🛠️ 技術棧
-- **框架**: [React Native](https://reactnative.dev/) + [Expo](https://expo.dev/)
-- **語言**: [TypeScript](https://www.typescriptlang.org/)
-- **導航**: [React Navigation](https://reactnavigation.org/)
-- **存儲**: [AsyncStorage](https://react-native-async-storage.github.io/async-storage/)
-- **UI 圖標**: [Ionicons (@expo/vector-icons)](https://icons.expo.fyi/)
+- **Frontend**: React Native + Expo (SDK 50+)
+- **Language**: TypeScript
+- **AI Integration**: [@google/genai](https://www.npmjs.com/package/@google/genai) (Google Gemini SDK)
+- **Charts**: `react-native-gifted-charts` & `react-native-chart-kit`
+- **Storage**: `AsyncStorage` & `expo-secure-store`
+- **UI/UX**: `expo-linear-gradient`, `Ionicons`, `MaterialCommunityIcons`
 
 ## 📂 專案架構
 ```text
 src/
-├── components/     # 可重複使用組件
-├── context/        # 全域狀態與資料存儲 (AppContext)
-├── navigation/     # 導航設定 (TabNavigator)
-├── screens/        # 頁面組組件 (Home, Log, Analysis, Settings)
-├── types/          # TypeScript 定義
-└── utils/          # 工具函數
+├── components/     # UI 組件（包含 AI 引導介面與圖表封裝）
+├── context/        # 全域狀態 (AppContext) 與本地持久化邏輯
+├── services/       # 外部服務 (Gemini 官方 SDK 整合層)
+├── screens/        # 核心頁面 (儀表板、紀錄、分析、設定)
+├── constants/      # 健身公式與系統常數
+├── types/          # 強型別定義
+└── utils/          # 卡路里計算與影像處理工具
 ```
 
 ## 🏁 快速開始
 
-### 1. 安裝依賴
+### 1. 安裝與啟動
 ```bash
+# 安裝依賴
 npm install
+
+# 啟動專案 (支援 iOS / Android / Web)
+npm run web  # 開啟網頁版
+# 或
+npx expo start # 使用 Expo Go 手機測試
 ```
 
-### 2. 啟動專案
-```bash
-# 啟動 Expo 開發伺服器
-npx expo start
+### 2. 打包 APK (Android 自行安裝)
+本專案使用 Expo EAS 服務進行雲端打包：
+1. **安裝 EAS CLI**: `npm install -g eas-cli`
+2. **登入 Expo**: `eas login`
+3. **執行打包指令**:
+   ```bash
+   eas build -p android --profile preview
+   ```
+4. 打包完成後掃描終端機 QR Code 即可下載 APK 安裝。
 
-# 啟動網頁預覽
-npm run web
-```
+### 3. 配置 AI 辨識功能
+本 App 不內建 API Key 以保護隱私並保持免費。請按照以下步驟啟用 AI 功能：
+1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 免費申請 API Key。
+2. 在 App 內進入 **「設定」 > 「AI 辨識系統」**。
+3. 貼上您的 API Key 並選擇模型（推薦使用 `gemini-1.5-flash`）。
+4. 通過測試連線後即可開始使用拍照辨識！
 
-### 3. 在手機上測試
-下載 **Expo Go** App 並掃描終端機顯示的 QR Code 即可。
+## 🗺️ 開發進度與路徑圖
+- [x] AI 食物影像辨識 (官方 SDK 整合)
+- [x] 貝茲曲線體重趨勢圖 (90 天)
+- [x] 去中心化引導配置流程 (Onboarding)
+- [ ] **Google Drive 數據備份與同步 (Next Step)**
+- [ ] **SQLite 資料庫遷移**
+- [ ] 飲水追蹤與週期分析提醒
 
 ---
+**CalorieBank** - 您最私密的智慧營養管家。
 開發者：Antigravity (Google DeepMind Team) & USER
