@@ -2,6 +2,7 @@
   "expo": {
     "name": "CalorieBank",
     "slug": "CalorieBank",
+    "scheme": "caloriebank",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,13 +19,21 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.cindy20303705.CalorieBank"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2df08341-6a24-42ba-8196-779b640b0050"
+      }
+    }
   }
 }

@@ -18,6 +18,7 @@ import { useAppContext } from '../context/AppContext';
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
 import { UserProfile } from '../types';
+import * as googleDrive from '../services/googleDriveService';
 import { validateGeminiKey } from '../services/geminiService';
 import * as SecureStore from 'expo-secure-store';
 import GeminiConfigModal from '../components/GeminiConfigModal';
@@ -40,6 +41,10 @@ export default function SettingsScreen() {
   const [apiKey, setApiKey] = useState('');
   const [showConfigModal, setShowConfigModal] = useState(false);
 
+  // Google Sync State
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [googleUser, setGoogleUser] = useState<{ name: string; token: string } | null>(null);
+
   useEffect(() => {
     refreshKeyState();
   }, []);
@@ -49,6 +54,16 @@ export default function SettingsScreen() {
   };
 
   const handleResetApp = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('重置所有數據\n\n這將會刪除您所有的飲食紀錄、體重資料以及 AI 設定，且無法復原。您確定要這麼做嗎？');
+      if (confirmed) {
+        resetAppData().then(() => {
+          window.alert('已重置：所有數據已清除，App 將回到初始狀態。');
+        });
+      }
+      return;
+    }
+
     Alert.alert(
       '重置所有數據',
       '這將會刪除您所有的飲食紀錄、體重資料以及 AI 設定，且無法復原。您確定要這麼做嗎？',
@@ -62,6 +77,75 @@ export default function SettingsScreen() {
             Alert.alert('已重置', '所有數據已清除，App 將回到初始狀態。');
           }
         },
+      ]
+    );
+  };
+
+  // Google Sync Handlers
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsSyncing(true);
+      const token = await googleDrive.googleLogin();
+      if (token) {
+        setGoogleUser({ name: '已連結的帳號', token });
+        Alert.alert('成功', 'Google 帳號連結成功');
+      }
+    } catch (error: any) {
+      Alert.alert('失敗', error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleGoogleSignOut = () => {
+    setGoogleUser(null);
+  };
+
+  const handleBackup = async () => {
+    if (!googleUser) {
+      Alert.alert('提示', '請先連結 Google 帳號');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const result = await googleDrive.backupToDrive(googleUser.token);
+      Alert.alert(result.success ? '成功' : '失敗', result.message);
+    } catch (error: any) {
+      Alert.alert('錯誤', error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!googleUser) {
+      Alert.alert('提示', '請先連結 Google 帳號');
+      return;
+    }
+    Alert.alert(
+      '確認還原',
+      '還原數據將會覆蓋您目前手機上的所有資料，建議先進行備份。確定要繼續嗎？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '確定還原',
+          style: 'destructive',
+          onPress: async () => {
+            setIsSyncing(true);
+            try {
+              const result = await googleDrive.restoreFromDrive(googleUser.token);
+              if (result.success) {
+                Alert.alert('還原成功', '資料已回復，請重新啟動 App。');
+              } else {
+                Alert.alert('失敗', result.message);
+              }
+            } catch (error: any) {
+              Alert.alert('錯誤', error.message);
+            } finally {
+              setIsSyncing(false);
+            }
+          }
+        }
       ]
     );
   };
@@ -289,16 +373,71 @@ export default function SettingsScreen() {
               <View style={styles.aiIconWrapper}>
                 <MaterialCommunityIcons name="robot" size={28} color="#FFF" />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.aiTextWrapper}>
                 <Text style={styles.aiTitle}>Gemini AI 設定</Text>
-                <Text style={styles.aiStatus}>
-                  {apiKey ? `● 已連線 (${userProfile.geminiModel || 'Flash'})` : '○ 尚未配置 (點擊設定)'}
+                <Text style={styles.aiSubtitle}>
+                  {apiKey ? `已連線: ${userProfile.geminiModel || 'Flash'}` : '尚未設定 API Key'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#CCC" />
             </View>
           </TouchableOpacity>
           <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
+        </View>
+
+        {/* Section: Data Backup & Sync */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>數據備份與同步</Text>
+          <View style={styles.card}>
+            <View style={styles.cardBody}>
+              <Text style={styles.syncDesc}>
+                您可以將所有飲食與體重紀錄備份到您的 Google Drive (AppData 隱藏資料夾)。切換手機時可輕鬆還原。
+              </Text>
+
+              <View style={styles.syncButtonGroup}>
+                <TouchableOpacity
+                  style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
+                  onPress={handleBackup}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  ) : (
+                    <Ionicons name="cloud-upload-outline" size={20} color="#007AFF" />
+                  )}
+                  <Text style={styles.syncBtnText}>立即備份</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
+                  onPress={handleRestore}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <ActivityIndicator size="small" color="#007AFF" />
+                  ) : (
+                    <Ionicons name="cloud-download-outline" size={20} color="#007AFF" />
+                  )}
+                  <Text style={styles.syncBtnText}>還原數據</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.itemRow, { borderTopWidth: 0.5, borderTopColor: '#F0F0F0', borderBottomWidth: 0 }]}>
+              <Text style={styles.itemLabel}>Google 帳號</Text>
+              {googleUser ? (
+                <TouchableOpacity onPress={handleGoogleSignOut} style={styles.googleAccountBtn}>
+                  <Text style={styles.googleAccountText}>{googleUser.name}</Text>
+                  <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={handleGoogleSignIn} style={styles.googleAccountBtn}>
+                  <Text style={styles.googleAccountText}>未連結</Text>
+                  <Ionicons name="log-in-outline" size={20} color="#007AFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Section: Danger Zone */}
@@ -465,19 +604,95 @@ const styles = StyleSheet.create({
   aiIconWrapper: {
     width: 48,
     height: 48,
-    borderRadius: 14,
-    backgroundColor: '#007AFF',
+    borderRadius: 24,
+    backgroundColor: '#007AFF', // You can change this to a gradient later
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 15,
     shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
-  aiTitle: { fontSize: 17, fontWeight: 'bold', color: '#333' },
-  aiStatus: { fontSize: 13, color: '#999', marginTop: 4 },
-  aiHint: { fontSize: 11, color: '#BBB', marginTop: 10, paddingHorizontal: 10, lineHeight: 16 },
-  dangerCard: { borderColor: '#FFEBEB', borderWidth: 1 },
-  dangerText: { fontSize: 16, color: '#FF3B30', fontWeight: '500' },
+  aiTextWrapper: {
+    flex: 1,
+  },
+  aiTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  aiSubtitle: {
+    fontSize: 13,
+    color: '#8E8E93',
+  },
+  aiHint: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 20,
+  },
+  cardBody: {
+    padding: 20,
+  },
+  syncDesc: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  syncButtonGroup: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  syncBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F7FF',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,122,255,0.1)',
+  },
+  syncBtnDisabled: {
+    opacity: 0.5,
+  },
+  syncBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  googleAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  googleAccountText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  dangerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#FFEBEB',
+  },
+  dangerText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 10,
+    flex: 1,
+  },
 });
