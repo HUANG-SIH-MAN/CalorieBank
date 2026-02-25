@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import WaterLogModal from '../components/WaterLogModal';
 import WaterSettingsModal from '../components/WaterSettingsModal';
 import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import { calculateMacroGoals } from '../utils/fitness';
+import { MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 
 export default function HomeScreen() {
   const { userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, addWeightLog, addWaterLog } = useAppContext();
@@ -74,10 +75,22 @@ export default function HomeScreen() {
   const waterGoal = baseWaterGoal + exerciseBonusWater;
   const waterProgress = Math.min(todayWater / waterGoal, 1);
 
-  // Container sizes from profile or defaults
   const containers = userProfile?.waterContainers || { small: 250, medium: 500, large: 1000 };
 
   const remaining = calorieGoal - todayCalories + todayExerciseCalories;
+
+  const groupedLogs = useMemo(() => {
+    const groups: Record<string, typeof currentFoodLogs> = {
+      BREAKFAST: [],
+      LUNCH: [],
+      DINNER: [],
+      SNACK: [],
+    };
+    currentFoodLogs.forEach(log => {
+      groups[log.mealType || 'SNACK'].push(log);
+    });
+    return groups;
+  }, [currentFoodLogs]);
 
   // BMI Calculation
   const heightM = (userProfile?.height || 170) / 100;
@@ -201,27 +214,22 @@ export default function HomeScreen() {
               />
             </View>
 
-            {currentFoodLogs.length === 0 ? (
-              <View style={styles.emptyDiet}>
-                <Text style={styles.emptyDietIcon}>🍽️</Text>
-                <Text style={styles.emptyDietText}>今天還沒有飲食紀錄</Text>
-                <Text style={styles.emptyDietSub}>前往「紀錄」頁面新增飲食</Text>
-              </View>
-            ) : (
-              currentFoodLogs.map((log, idx) => (
-                <View key={idx} style={styles.foodLogItem}>
-                  <View style={styles.foodLogLeft}>
-                    <Text style={styles.foodLogName} numberOfLines={1}>{log.name}</Text>
-                    <Text style={styles.foodLogMacro}>
-                      {log.protein ? `蛋白 ${log.protein.toFixed(0)}g` : ''}
-                      {log.carbs ? `  碳水 ${log.carbs.toFixed(0)}g` : ''}
-                      {log.fat ? `  脂肪 ${log.fat.toFixed(0)}g` : ''}
-                    </Text>
+            <View style={styles.mealSummaryContainer}>
+              {(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const).map(type => {
+                const logs = groupedLogs[type];
+                const subtotal = logs.reduce((s, l) => s + l.calories, 0);
+
+                return (
+                  <View key={type} style={styles.mealSummaryRow}>
+                    <View style={styles.mealTitleRow}>
+                      <Text style={styles.mealIcon}>{MEAL_TYPE_ICONS[type]}</Text>
+                      <Text style={styles.mealLabel}>{MEAL_TYPE_LABELS[type]}</Text>
+                    </View>
+                    <Text style={styles.mealSubtotal}>{subtotal} <Text style={styles.unitSmall}>kcal</Text></Text>
                   </View>
-                  <Text style={styles.foodLogCalories}>{log.calories} kcal</Text>
-                </View>
-              ))
-            )}
+                );
+              })}
+            </View>
           </View>
         </View>
 
@@ -681,6 +689,44 @@ const styles = StyleSheet.create({
   macroValue: { fontSize: 11, color: '#999' },
   macroBarBg: { height: 6, backgroundColor: '#F0F0F0', borderRadius: 3, overflow: 'hidden' },
   macroBarFill: { height: '100%', borderRadius: 3 },
+  // Meal Summary Section
+  mealSummaryContainer: {
+    marginTop: 10,
+    gap: 4,
+  },
+  mealSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 15,
+    marginBottom: 8,
+  },
+  mealTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mealIcon: {
+    fontSize: 18,
+  },
+  mealLabel: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  mealSubtotal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF7043',
+  },
+  unitSmall: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: 'normal',
+  },
 });
 
 function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
@@ -708,12 +754,25 @@ function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, 
 
   const total = (goal || 0) + (exercise || 0);
   const safeTotal = total > 0 ? total : 1;
-  const rawRatio = (remaining || 0) / safeTotal;
-  const remainingRatio = Math.max(0, Math.min(1, isFinite(rawRatio) ? rawRatio : 1));
 
-  // Colors per user request
+  const isOverflow = remaining < 0;
+
+  // Logic for Ratio:
+  // 1. Not Overflow: Blue ring shows remaining % (Ratio of budget left)
+  // 2. Overflow: Red ring shows excess % (How much you overate relative to budget)
+  let ratio = 0;
+  if (isOverflow) {
+    const excess = Math.abs(remaining);
+    ratio = Math.min(excess / safeTotal, 1); // Cap at 100% red if you ate >= 2x budget
+  } else {
+    ratio = Math.min(remaining / safeTotal, 1);
+  }
+
+  // Colors
   const blueColor = "#2196F3";
+  const redColor = "#FF3333";
   const greyColor = "#E5E5EA";
+  const activeColor = isOverflow ? redColor : blueColor;
 
   return (
     <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
@@ -727,12 +786,12 @@ function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, 
           cx={radius}
           cy={radius}
         />
-        {/* Step 2: Overlay Circle - Blue (The \"Remaining\" part) starting from 12 o'clock */}
+        {/* Step 2: Overlay Circle - Color (Blue for left, Red for excess) starting from 12 o'clock */}
         <Circle
-          stroke={blueColor}
+          stroke={activeColor}
           fill="transparent"
           strokeWidth={stroke}
-          strokeDasharray={`${remainingRatio * circumference} ${circumference}`}
+          strokeDasharray={`${ratio * circumference} ${circumference}`}
           strokeDashoffset={0}
           strokeLinecap="round"
           r={normalizedRadius}
@@ -741,7 +800,9 @@ function CalorieCircle({ goal, consumed, exercise, remaining }: { goal: number, 
         />
       </Svg>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#1C1C1E' }}>{remaining}</Text>
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: isOverflow ? redColor : '#1C1C1E' }}>
+          {remaining}
+        </Text>
         <Text style={{ fontSize: 14, color: '#8E8E93', marginTop: 2 }}>還能吃</Text>
       </View>
     </View>

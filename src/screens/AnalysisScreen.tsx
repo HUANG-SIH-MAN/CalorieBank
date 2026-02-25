@@ -42,7 +42,11 @@ export default function AnalysisScreen() {
         label: `${d.getMonth() + 1}/${d.getDate()}`,
         frontColor: total > goal ? '#FFAB91' : '#81C784',
         topLabelComponent: () => (
-          <Text style={{ fontSize: 9, color: '#999', marginBottom: 4 }}>{total > 0 ? total : ''}</Text>
+          <View style={{ width: 40, alignItems: 'center', marginLeft: -8 }}>
+            <Text style={{ fontSize: 10, color: '#999', marginBottom: 4 }}>
+              {total > 0 ? total : ''}
+            </Text>
+          </View>
         ),
       };
     });
@@ -60,7 +64,11 @@ export default function AnalysisScreen() {
         label: `${d.getMonth() + 1}/${d.getDate()}`,
         frontColor: '#64B5F6',
         topLabelComponent: () => (
-          <Text style={{ fontSize: 9, color: '#999', marginBottom: 4 }}>{total > 0 ? total : ''}</Text>
+          <View style={{ width: 40, alignItems: 'center', marginLeft: -8 }}>
+            <Text style={{ fontSize: 10, color: '#999', marginBottom: 4 }}>
+              {total > 0 ? total : ''}
+            </Text>
+          </View>
         ),
       };
     });

@@ -20,14 +20,17 @@ import * as SecureStore from 'expo-secure-store';
 import { analyzeFoodImage, FoodAnalysisResult } from '../services/geminiService';
 import { useAppContext } from '../context/AppContext';
 import { calculateMacroGoals } from '../utils/fitness';
+import { getMealTypeByTime, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 import GeminiConfigModal from './GeminiConfigModal';
+import FoodTagEditorModal from './FoodTagEditorModal';
 
 const SECURE_KEY = 'gemini_api_key';
+const DEFAULT_FOOD_TAGS = ['大碗', '小份', '半份', '加蛋', '少油'];
 
 interface FoodScanModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (result: FoodAnalysisResult) => void;
+  onConfirm: (result: FoodAnalysisResult, mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK') => void;
   date: string;
 }
 
@@ -67,6 +70,9 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const [manualCarbs, setManualCarbs] = useState('');
   const [manualFat, setManualFat] = useState('');
 
+  const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>(getMealTypeByTime());
+  const [showTagEditor, setShowTagEditor] = useState(false);
+
   const resetAll = () => {
     setStage('idle');
     setImageBase64(null);
@@ -80,6 +86,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setManualProtein('');
     setManualCarbs('');
     setManualFat('');
+    setSelectedMealType(getMealTypeByTime());
   };
 
   const pickImage = async (useCamera: boolean) => {
@@ -189,7 +196,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       carbs: parseInt(editCarbs) || 0,
       fat: parseInt(editFat) || 0,
     };
-    onConfirm(confirmed);
+    onConfirm(confirmed, selectedMealType);
     resetAll();
     onClose();
   };
@@ -206,7 +213,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       carbs: parseInt(manualCarbs) || 0,
       fat: parseInt(manualFat) || 0,
     };
-    onConfirm(manual);
+    onConfirm(manual, selectedMealType);
     resetAll();
     onClose();
   };
@@ -262,7 +269,15 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       {/* Hints Input */}
       {imageUri && (
         <View style={styles.hintsCard}>
-          <Text style={styles.hintsLabel}>💡 補充說明（選填，可提升辨識準確度）</Text>
+          <View style={styles.hintsHeader}>
+            <View>
+              <Text style={styles.hintsLabel}>💡 補充說明</Text>
+              <Text style={styles.hintsLabelSub}>（選填，可提升辨識準確度）</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowTagEditor(true)} style={styles.settingsIconBtn}>
+              <Ionicons name="settings-outline" size={20} color="#999" />
+            </TouchableOpacity>
+          </View>
           <TextInput
             style={styles.hintsInput}
             placeholder="例如：滷肉飯、大碗、加蛋..."
@@ -273,7 +288,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           />
           {/* Quick Tag Buttons */}
           <View style={styles.tagRow}>
-            {['大碗', '小份', '半份', '加蛋', '少油'].map(tag => (
+            {(userProfile?.customFoodTags || DEFAULT_FOOD_TAGS).map(tag => (
               <TouchableOpacity
                 key={tag}
                 style={styles.tag}
@@ -367,11 +382,37 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           unit="g"
           proportion={parseInt(editFat) / macroGoals.fat}
         />
+
+        <View style={styles.mealTypeSection}>
+          <Text style={styles.resultFieldLabel}>用餐時段</Text>
+          <View style={styles.mealTypeRow}>
+            {(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const).map(type => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.mealTypeBtn, selectedMealType === type && styles.mealTypeBtnActive]}
+                onPress={() => setSelectedMealType(type)}
+              >
+                <Text style={styles.mealTypeIcon}>{MEAL_TYPE_ICONS[type]}</Text>
+                <Text style={[styles.mealTypeLabel, selectedMealType === type && styles.mealTypeLabelActive]}>
+                  {MEAL_TYPE_LABELS[type].split('/')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
 
       {/* Retry with hints */}
       <View style={styles.hintsCard}>
-        <Text style={styles.hintsLabel}>💡 補充提示（重新辨識時使用）</Text>
+        <View style={styles.hintsHeader}>
+          <View>
+            <Text style={styles.hintsLabel}>💡 補充提示</Text>
+            <Text style={styles.hintsLabelSub}>（重新辨識時使用）</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowTagEditor(true)} style={styles.settingsIconBtn}>
+            <Ionicons name="settings-outline" size={20} color="#999" />
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.hintsInput}
           placeholder="例如：這是韓式石鍋拌飯、份量偏大..."
@@ -381,7 +422,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           returnKeyType="done"
         />
         <View style={styles.tagRow}>
-          {['大碗', '小份', '半份', '加蛋', '少油'].map(tag => (
+          {(userProfile?.customFoodTags || DEFAULT_FOOD_TAGS).map(tag => (
             <TouchableOpacity
               key={tag}
               style={styles.tag}
@@ -465,10 +506,27 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
             style={styles.manualInput}
             placeholder="0"
             placeholderTextColor="#BBB"
-            value={manualFat}
             onChangeText={setManualFat}
             keyboardType="numeric"
           />
+        </View>
+
+        <View style={styles.manualField}>
+          <Text style={styles.manualLabel}>用餐時段</Text>
+          <View style={styles.mealTypeRow}>
+            {(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const).map(type => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.mealTypeBtn, selectedMealType === type && styles.mealTypeBtnActive]}
+                onPress={() => setSelectedMealType(type)}
+              >
+                <Text style={styles.mealTypeIcon}>{MEAL_TYPE_ICONS[type]}</Text>
+                <Text style={[styles.mealTypeLabel, selectedMealType === type && styles.mealTypeLabelActive]}>
+                  {MEAL_TYPE_LABELS[type].split('/')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -515,6 +573,12 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           setShowConfig(false);
           doAnalyze();
         }}
+      />
+
+      <FoodTagEditorModal
+        visible={showTagEditor}
+        onClose={() => setShowTagEditor(false)}
+        tags={userProfile?.customFoodTags || DEFAULT_FOOD_TAGS}
       />
     </>
   );
@@ -641,7 +705,18 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  hintsLabel: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 10 },
+  hintsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  settingsIconBtn: {
+    padding: 8,
+    marginRight: -4,
+  },
+  hintsLabel: { fontSize: 16, fontWeight: '700', color: '#1C1C1E' },
+  hintsLabelSub: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
   hintsInput: {
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -794,5 +869,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#FAFAFA',
+  },
+  mealTypeSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 0.5,
+    borderTopColor: '#EEE',
+  },
+  mealTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    gap: 8,
+  },
+  mealTypeBtn: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  mealTypeBtnActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#4CAF50',
+  },
+  mealTypeIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  mealTypeLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  mealTypeLabelActive: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
   },
 });

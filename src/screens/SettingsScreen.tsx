@@ -45,6 +45,9 @@ export default function SettingsScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [googleUser, setGoogleUser] = useState<{ name: string; token: string } | null>(null);
 
+  // Custom Tags
+
+
   useEffect(() => {
     refreshKeyState();
   }, []);
@@ -150,8 +153,8 @@ export default function SettingsScreen() {
     );
   };
 
-  const startEditing = () => {
-    setEditProfile(userProfile);
+  const handleStartEdit = () => {
+    setEditProfile({ ...userProfile! });
     setIsEditing(true);
   };
 
@@ -197,7 +200,7 @@ export default function SettingsScreen() {
               <Text style={styles.saveBtnText}>儲存</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={startEditing}>
+            <TouchableOpacity onPress={handleStartEdit}>
               <Text style={styles.editBtnText}>編輯</Text>
             </TouchableOpacity>
           )}
@@ -447,10 +450,10 @@ export default function SettingsScreen() {
             style={[styles.card, styles.dangerCard]}
             onPress={handleResetApp}
           >
-            <View style={styles.itemRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={[styles.itemRow, { borderBottomWidth: 0, width: '100%', paddingVertical: 5 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
                 <Ionicons name="trash-outline" size={22} color="#FF3B30" />
-                <Text style={styles.dangerText}>刪除所有資料並登出</Text>
+                <Text style={styles.dangerText} numberOfLines={1} ellipsizeMode="tail">刪除所有資料並登出</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#FF3B30" />
             </View>

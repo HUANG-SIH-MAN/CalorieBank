@@ -28,6 +28,7 @@ export interface UserProfile {
   customExercises?: ExerciseType[];
   stepGoal?: number;
   geminiModel?: string;
+  customFoodTags?: string[];
 }
 
 export interface FoodLog {

@@ -84,17 +84,7 @@ export default function LogScreen() {
     Alert.alert('成功', `已紀錄 ${exercise.name} ${mins} 分鐘，消耗 ${caloriesBurned} kcal`);
   };
 
-  const handleFoodScanConfirm = (result: any) => {
-    // Determine meal type based on current time if it's today, otherwise default to SNACK
-    const now = new Date();
-    const currentHour = now.getHours();
-    let mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' = 'SNACK';
-
-    if (currentHour < 10) mealType = 'BREAKFAST';
-    else if (currentHour < 14) mealType = 'LUNCH';
-    else if (currentHour < 20) mealType = 'DINNER';
-    else mealType = 'SNACK';
-
+  const handleFoodScanConfirm = (result: any, mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK') => {
     addFoodLog({
       name: result.name,
       calories: result.calories,
