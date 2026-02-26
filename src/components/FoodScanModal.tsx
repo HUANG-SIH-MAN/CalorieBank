@@ -224,17 +224,24 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   };
 
   // ─── RENDER ────────────────────────────────────────────────
+  //
+  // 圖片顯示對應位置（拍完照／選圖後 vs 辨識完成後）：
+  // - 設定圖片來源：pickImage() 約第 92–136 行，setImageUri 第 130 行
+  // - 辨識前顯示：renderIdle() 約第 238–250 行（有圖時的 <Image>）
+  // - 辨識中顯示：renderAnalyzing() 約第 329–335 行
+  // - 辨識後顯示：renderResult() 約第 347–354 行（同一張 imageUri）
+  // - 樣式：photoSmall、photoWrapperWithRetake 見 StyleSheet
 
   const renderIdle = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      {/* Photo Area */}
+      {/* Photo Area：與 renderResult 完全同一結構（無 photoContainer），見 337–345 行 */}
       {imageUri ? (
-        <View style={styles.photoContainer}>
+        <View style={styles.photoWrapperWithRetake}>
           <Image
             key={imageUri.substring(0, 50)}
             source={{ uri: imageUri }}
-            style={[styles.photo, { aspectRatio: imageRatio || 1 }]}
-            resizeMode="cover"
+            style={[styles.photoSmall, { aspectRatio: imageRatio || 1 }]}
+            resizeMode="contain"
           />
           <TouchableOpacity style={styles.retakeBtn} onPress={() => { setImageUri(null); setImageBase64(null); }}>
             <Ionicons name="refresh" size={18} color="#FFF" />
@@ -632,6 +639,8 @@ const styles = StyleSheet.create({
 
   // Photo
   photoContainer: { borderRadius: 20, overflow: 'hidden', marginBottom: 16, backgroundColor: '#F0F0F0' },
+  /** idle 用：只包一層、不設 overflow，與 result 的圖片結構一致 */
+  photoWrapperWithRetake: { position: 'relative', marginBottom: 16 },
   photo: { width: '100%' },
   retakeBtn: {
     position: 'absolute',
