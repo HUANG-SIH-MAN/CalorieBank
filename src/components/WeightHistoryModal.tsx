@@ -86,6 +86,50 @@ export default function WeightHistoryModal({
 
   const chartData = prepareChartData();
 
+  const prepareBodyFatChartData = () => {
+    const now = new Date();
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(now.getDate() - 90);
+
+    const recentLogs = weightLogs
+      .filter(log => log.bodyFatPercent != null && new Date(log.date) >= ninetyDaysAgo)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (recentLogs.length === 0) {
+      return {
+        labels: [''] as string[],
+        datasets: [{ data: [0] as number[] }]
+      };
+    }
+
+    const maxLabels = 5;
+    const labels = recentLogs.map((log, index) => {
+      if (recentLogs.length <= maxLabels) {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+      const step = Math.floor(recentLogs.length / (maxLabels - 1));
+      if (index === 0 || index === recentLogs.length - 1 || (index % step === 0 && index + step < recentLogs.length)) {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+      return '';
+    });
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: recentLogs.map(log => log.bodyFatPercent as number),
+          color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+          strokeWidth: 2
+        }
+      ],
+    };
+  };
+
+  const bodyFatChartData = prepareBodyFatChartData();
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
@@ -158,13 +202,64 @@ export default function WeightHistoryModal({
             )}
           </View>
 
+          {/* Body Fat Chart Card */}
+          <View style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>體脂率</Text>
+              <Text style={styles.chartSubtitle}>(最近90天)</Text>
+            </View>
+
+            {bodyFatChartData.datasets[0].data.length > 0 && bodyFatChartData.datasets[0].data[0] !== 0 ? (
+              <View style={styles.chartContainer}>
+                <LineChart
+                  data={bodyFatChartData}
+                  width={chartWidth}
+                  height={180}
+                  chartConfig={{
+                    backgroundColor: '#ffffff',
+                    backgroundGradientFrom: '#ffffff',
+                    backgroundGradientTo: '#ffffff',
+                    decimalPlaces: 1,
+                    color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
+                    propsForLabels: { fontSize: 10 },
+                    propsForDots: {
+                      r: '5',
+                      strokeWidth: '2',
+                      stroke: '#2196F3'
+                    },
+                    propsForBackgroundLines: {
+                      strokeDasharray: '',
+                      stroke: '#F0F0F0',
+                      strokeWidth: 1,
+                    },
+                  }}
+                  bezier={true}
+                  withInnerLines={true}
+                  withOuterLines={false}
+                  withShadow={false}
+                  style={{ marginLeft: -16 }}
+                  segments={4}
+                  fromZero={false}
+                />
+              </View>
+            ) : (
+              <View style={styles.noData}>
+                <Text style={styles.noDataText}>尚無體脂率數據</Text>
+              </View>
+            )}
+          </View>
+
           {/* Records List */}
           <View style={styles.recordsSection}>
             <Text style={styles.recordsTitle}>記錄</Text>
             {sortedLogs.map((log) => (
               <View key={log.id} style={styles.recordItem}>
                 <Text style={styles.recordDate}>{formatDate(log.date)}</Text>
-                <Text style={styles.recordWeight}>{log.weight.toFixed(1)} kg</Text>
+                <Text style={styles.recordWeight}>
+                  {log.weight.toFixed(1)} kg
+                  {log.bodyFatPercent != null ? ` | 體脂 ${log.bodyFatPercent}%` : ''}
+                </Text>
               </View>
             ))}
           </View>

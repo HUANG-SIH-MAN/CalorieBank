@@ -14,13 +14,23 @@ import DatePickerModal from './DatePickerModal';
 interface WeightLogModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (weight: number, date: string) => void;
+  onSave: (weight: number, date: string, bodyFatPercent?: number) => void;
   currentWeight?: number;
   initialDate: string;
+  /** 帶入最近一筆體脂率，沒有則不填（可手動填 0） */
+  initialBodyFatPercent?: number;
 }
 
-export default function WeightLogModal({ visible, onClose, onSave, currentWeight, initialDate }: WeightLogModalProps) {
+export default function WeightLogModal({
+  visible,
+  onClose,
+  onSave,
+  currentWeight,
+  initialDate,
+  initialBodyFatPercent,
+}: WeightLogModalProps) {
   const [weight, setWeight] = useState(currentWeight?.toString() || '');
+  const [bodyFatPercent, setBodyFatPercent] = useState('');
   const [logDate, setLogDate] = useState(initialDate);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
@@ -28,6 +38,16 @@ export default function WeightLogModal({ visible, onClose, onSave, currentWeight
   React.useEffect(() => {
     setLogDate(initialDate);
   }, [initialDate]);
+
+  // 開啟時帶入最近體脂；沒有則留空（可手動填 0）
+  React.useEffect(() => {
+    if (visible) {
+      setWeight(currentWeight != null && currentWeight > 0 ? String(currentWeight) : '');
+      setBodyFatPercent(
+        initialBodyFatPercent != null ? String(initialBodyFatPercent) : ''
+      );
+    }
+  }, [visible, currentWeight, initialBodyFatPercent]);
 
   const formatDateLabel = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -37,7 +57,13 @@ export default function WeightLogModal({ visible, onClose, onSave, currentWeight
   const handleSave = () => {
     const w = parseFloat(weight);
     if (!isNaN(w) && w > 0) {
-      onSave(w, logDate);
+      const parsedBodyFat =
+        bodyFatPercent.trim() === ''
+          ? undefined
+          : parseFloat(bodyFatPercent);
+      const bodyFatValue =
+        parsedBodyFat != null && !Number.isNaN(parsedBodyFat) ? parsedBodyFat : undefined;
+      onSave(w, logDate, bodyFatValue);
       onClose();
     }
   };
@@ -71,6 +97,21 @@ export default function WeightLogModal({ visible, onClose, onSave, currentWeight
                 autoFocus
               />
               <Text style={styles.unitText}>千克</Text>
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>體脂率（選填）</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={bodyFatPercent}
+                onChangeText={(t) => setBodyFatPercent(t.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor="#CCC"
+              />
+              <Text style={styles.unitText}>%</Text>
             </View>
           </View>
 

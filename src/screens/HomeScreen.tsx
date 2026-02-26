@@ -49,6 +49,14 @@ export default function HomeScreen() {
 
   const dayWeightLog = weightLogs.find((log: any) => log.date === selectedDate);
   const displayWeight = dayWeightLog ? dayWeightLog.weight : (userProfile?.weight || 0);
+  const latestLogWithBodyFat = [...weightLogs]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .find(log => log.bodyFatPercent != null);
+  const displayBodyFat =
+    dayWeightLog?.bodyFatPercent ??
+    latestLogWithBodyFat?.bodyFatPercent ??
+    userProfile?.bodyFatPercent ??
+    null;
 
   const currentWaterLogs = waterLogs.filter(log => log.date === selectedDate);
   const todayWater = currentWaterLogs.reduce((sum, log) => sum + log.amount, 0);
@@ -106,6 +114,31 @@ export default function HomeScreen() {
   };
 
   const bmiStatus = getBMICategory(bmi);
+
+  /** 體脂率標準（依性別）：回傳 label、color、tip */
+  const getBodyFatCategory = (percent: number, gender: 'MALE' | 'FEMALE' | 'OTHER') => {
+    if (gender === 'FEMALE') {
+      if (percent < 21) return { label: '過低', color: '#64B5F6', tip: '體脂偏低，注意營養均衡。' };
+      if (percent < 33) return { label: '標準', color: '#66BB6A', tip: '體脂在理想範圍，保持喔！' };
+      if (percent < 39) return { label: '偏高', color: '#FFB74D', tip: '可加強有氧與飲食控制。' };
+      return { label: '過高', color: '#E57373', tip: '建議規律運動並諮詢專業建議。' };
+    }
+    if (gender === 'MALE') {
+      if (percent < 14) return { label: '過低', color: '#64B5F6', tip: '體脂偏低，注意營養均衡。' };
+      if (percent < 24) return { label: '標準', color: '#66BB6A', tip: '體脂在理想範圍，保持喔！' };
+      if (percent < 28) return { label: '偏高', color: '#FFB74D', tip: '可加強有氧與飲食控制。' };
+      return { label: '過高', color: '#E57373', tip: '建議規律運動並諮詢專業建議。' };
+    }
+    if (percent < 18) return { label: '過低', color: '#64B5F6', tip: '體脂偏低，注意營養均衡。' };
+    if (percent < 28) return { label: '標準', color: '#66BB6A', tip: '體脂在理想範圍，保持喔！' };
+    if (percent < 34) return { label: '偏高', color: '#FFB74D', tip: '可加強有氧與飲食控制。' };
+    return { label: '過高', color: '#E57373', tip: '建議規律運動並諮詢專業建議。' };
+  };
+
+  const bodyFatStatus =
+    displayBodyFat != null
+      ? getBodyFatCategory(displayBodyFat, userProfile?.gender ?? 'MALE')
+      : null;
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -222,7 +255,7 @@ export default function HomeScreen() {
                 return (
                   <View key={type} style={styles.mealSummaryRow}>
                     <View style={styles.mealTitleRow}>
-                      <Text style={styles.mealIcon}>{MEAL_TYPE_ICONS[type]}</Text>
+                      <Text style={styles.mealSummaryIcon}>{MEAL_TYPE_ICONS[type]}</Text>
                       <Text style={styles.mealLabel}>{MEAL_TYPE_LABELS[type]}</Text>
                     </View>
                     <Text style={styles.mealSubtotal}>{subtotal} <Text style={styles.unitSmall}>kcal</Text></Text>
@@ -240,11 +273,11 @@ export default function HomeScreen() {
             onPress={() => setWeightHistoryVisible(true)}
             activeOpacity={0.7}
           >
-            <View style={styles.infoLeft}>
+            <View style={[styles.infoLeft, styles.infoLeftShrink]}>
               <View style={[styles.iconBg, { backgroundColor: '#FFF9C4' }]}>
                 <MaterialCommunityIcons name="scale-bathroom" size={24} color="#FBC02D" />
               </View>
-              <View>
+              <View style={styles.infoLeftContent}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={styles.infoTitle}>體重紀錄</Text>
                   <View style={[styles.bmiBadge, { backgroundColor: bmiStatus.color }]}>
@@ -252,9 +285,25 @@ export default function HomeScreen() {
                   </View>
                 </View>
                 <Text style={styles.infoSub}>
-                  {displayWeight} kg <Text style={styles.bmiText}>| BMI: {bmi.toFixed(1)}</Text>
+                  {displayWeight} kg<Text style={styles.bmiText}> | BMI: {bmi.toFixed(1)}</Text>
                 </Text>
-                <Text style={styles.bmiTip}>{bmiStatus.tip}</Text>
+                {displayBodyFat != null && bodyFatStatus && (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      <Text style={styles.infoSub}>體脂 {displayBodyFat}%</Text>
+                      <View
+                        style={[
+                          styles.bmiBadge,
+                          { backgroundColor: bodyFatStatus.color, marginLeft: 8 },
+                        ]}
+                      >
+                        <Text style={styles.bmiBadgeText}>{bodyFatStatus.label}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.bmiTip}>{bodyFatStatus.tip}</Text>
+                  </>
+                )}
+                {displayBodyFat == null && <Text style={styles.bmiTip}>{bmiStatus.tip}</Text>}
               </View>
             </View>
             <TouchableOpacity
@@ -383,9 +432,18 @@ export default function HomeScreen() {
       <WeightLogModal
         visible={weightModalVisible}
         onClose={() => setWeightModalVisible(false)}
-        onSave={(w, d) => addWeightLog({ weight: w, date: d })}
+        onSave={(w, d, bodyFat) =>
+          addWeightLog({
+            weight: w,
+            date: d,
+            ...(bodyFat != null ? { bodyFatPercent: bodyFat } : {}),
+          })
+        }
         currentWeight={displayWeight}
         initialDate={selectedDate}
+        initialBodyFatPercent={
+          latestLogWithBodyFat?.bodyFatPercent ?? userProfile?.bodyFatPercent ?? undefined
+        }
       />
 
       <WaterLogModal
@@ -582,6 +640,8 @@ const styles = StyleSheet.create({
   },
   waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   infoLeft: { flexDirection: 'row', alignItems: 'center' },
+  infoLeftShrink: { flex: 1, minWidth: 0, marginRight: 12 },
+  infoLeftContent: { flex: 1, minWidth: 0 },
   iconBg: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   infoTitle: { fontSize: 18, fontWeight: 'bold' },
   infoSub: { fontSize: 14, color: '#6C757D', marginTop: 2 },
@@ -709,7 +769,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  mealIcon: {
+  mealSummaryIcon: {
     fontSize: 18,
   },
   mealLabel: {

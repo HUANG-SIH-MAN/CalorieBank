@@ -277,6 +277,19 @@ export default function SettingsScreen() {
               isEditing={isEditing}
               onChangeText={(v: string) => updateField('weight', parseFloat(v) || 0)}
             />
+            <SettingInput
+              label="體脂率"
+              value={
+                (isEditing ? editProfile?.bodyFatPercent : userProfile.bodyFatPercent) != null
+                  ? String(isEditing ? editProfile?.bodyFatPercent : userProfile.bodyFatPercent)
+                  : ''
+              }
+              unit="%"
+              isEditing={isEditing}
+              onChangeText={(v: string) =>
+                updateField('bodyFatPercent', v.trim() === '' ? undefined : parseFloat(v) || undefined)
+              }
+            />
           </View>
         </View>
 

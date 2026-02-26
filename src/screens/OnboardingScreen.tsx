@@ -30,6 +30,7 @@ export default function OnboardingScreen() {
   const [weight, setWeight] = useState('');
   const [activityLevel, setActivityLevel] = useState('SEDENTARY');
   const [goalWeight, setGoalWeight] = useState('');
+  const [bodyFatPercent, setBodyFatPercent] = useState('');
   const [speed, setSpeed] = useState('STEADY');
 
   const calculateGoal = () => {
@@ -46,6 +47,8 @@ export default function OnboardingScreen() {
 
   const handleFinish = () => {
     const dailyCalorieGoal = calculateGoal();
+    const parsedBodyFat =
+      bodyFatPercent.trim() === '' ? undefined : parseFloat(bodyFatPercent);
     const profile: UserProfile = {
       name: 'User',
       age: parseInt(age) || 25,
@@ -56,6 +59,9 @@ export default function OnboardingScreen() {
       activityLevel: activityLevel as any,
       weightChangeSpeed: speed as any,
       dailyCalorieGoal,
+      ...(parsedBodyFat != null && !Number.isNaN(parsedBodyFat)
+        ? { bodyFatPercent: parsedBodyFat }
+        : {}),
     };
     setUserProfile(profile);
   };
@@ -118,6 +124,18 @@ export default function OnboardingScreen() {
                 value={weight}
                 onChangeText={(t) => setWeight(t.replace(/[^0-9.]/g, ''))}
                 placeholder="70.5"
+                placeholderTextColor="#AAA"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>體脂率 (%)（選填）</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={bodyFatPercent}
+                onChangeText={(t) => setBodyFatPercent(t.replace(/[^0-9.]/g, ''))}
+                placeholder="例如 22"
                 placeholderTextColor="#AAA"
               />
             </View>

@@ -29,6 +29,7 @@ export interface UserProfile {
   stepGoal?: number;
   geminiModel?: string;
   customFoodTags?: string[];
+  bodyFatPercent?: number; // optional, for display when no weight log has it
 }
 
 export interface FoodLog {
@@ -46,6 +47,7 @@ export interface WeightLog {
   id: string;
   weight: number;
   date: string; // ISO date
+  bodyFatPercent?: number; // optional, logged with weight for trend charts
 }
 export interface WaterLog {
   id: string;

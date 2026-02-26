@@ -29,7 +29,8 @@ export const initDatabase = async () => {
       favoriteExerciseIds TEXT, -- JSON string
       customExercises TEXT, -- JSON string
       stepGoal INTEGER,
-      geminiModel TEXT
+      geminiModel TEXT,
+      bodyFatPercent REAL
     );
 
     CREATE TABLE IF NOT EXISTS food_logs (
@@ -46,7 +47,8 @@ export const initDatabase = async () => {
     CREATE TABLE IF NOT EXISTS weight_logs (
       id TEXT PRIMARY KEY,
       weight REAL,
-      date TEXT
+      date TEXT,
+      bodyFatPercent REAL
     );
 
     CREATE TABLE IF NOT EXISTS water_logs (
@@ -66,6 +68,18 @@ export const initDatabase = async () => {
     );
   `);
 
+  // Migration: add bodyFatPercent to existing tables (ignore if column already exists)
+  try {
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN bodyFatPercent REAL;');
+  } catch (_e) {
+    // Column already exists on new installs
+  }
+  try {
+    await db.execAsync('ALTER TABLE weight_logs ADD COLUMN bodyFatPercent REAL;');
+  } catch (_e) {
+    // Column already exists on new installs
+  }
+
   return db;
 };
 
@@ -75,8 +89,8 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
     `INSERT OR REPLACE INTO user_profile (
       id, name, age, gender, height, weight, goalWeight, activityLevel, 
       weightChangeSpeed, dailyCalorieGoal, waterGoal, waterContainers, 
-      favoriteExerciseIds, customExercises, stepGoal, geminiModel
-    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      favoriteExerciseIds, customExercises, stepGoal, geminiModel, bodyFatPercent
+    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       profile.name, profile.age, profile.gender, profile.height, profile.weight, 
       profile.goalWeight, profile.activityLevel, profile.weightChangeSpeed || null, 
@@ -85,7 +99,8 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
       JSON.stringify(profile.favoriteExerciseIds || []),
       JSON.stringify(profile.customExercises || []),
       profile.stepGoal || null,
-      profile.geminiModel || null
+      profile.geminiModel || null,
+      profile.bodyFatPercent ?? null
     ]
   );
 };
@@ -95,7 +110,8 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     name: string, age: number, gender: any, height: number, weight: number, 
     goalWeight: number, activityLevel: any, weightChangeSpeed: any, 
     dailyCalorieGoal: number, waterGoal: number, waterContainers: string, 
-    favoriteExerciseIds: string, customExercises: string, stepGoal: number, geminiModel: string
+    favoriteExerciseIds: string, customExercises: string, stepGoal: number, geminiModel: string,
+    bodyFatPercent?: number
   }>('SELECT * FROM user_profile WHERE id = 1');
 
   if (!row) return null;
@@ -115,7 +131,8 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     favoriteExerciseIds: JSON.parse(row.favoriteExerciseIds),
     customExercises: JSON.parse(row.customExercises),
     stepGoal: row.stepGoal,
-    geminiModel: row.geminiModel
+    geminiModel: row.geminiModel,
+    bodyFatPercent: row.bodyFatPercent ?? undefined
   };
 };
 
@@ -138,8 +155,8 @@ export const getAllFoodLogs = async (db: SQLite.SQLiteDatabase): Promise<FoodLog
 // CRUD for Weight Logs
 export const saveWeightLog = async (db: SQLite.SQLiteDatabase, log: WeightLog) => {
   await db.runAsync(
-    'INSERT OR REPLACE INTO weight_logs (id, weight, date) VALUES (?, ?, ?)',
-    [log.id, log.weight, log.date]
+    'INSERT OR REPLACE INTO weight_logs (id, weight, date, bodyFatPercent) VALUES (?, ?, ?, ?)',
+    [log.id, log.weight, log.date, log.bodyFatPercent ?? null]
   );
 };
 
@@ -148,7 +165,15 @@ export const deleteWeightLogFromDb = async (db: SQLite.SQLiteDatabase, id: strin
 };
 
 export const getAllWeightLogs = async (db: SQLite.SQLiteDatabase): Promise<WeightLog[]> => {
-  return await db.getAllAsync<WeightLog>('SELECT * FROM weight_logs ORDER BY date DESC');
+  const rows = await db.getAllAsync<{ id: string; weight: number; date: string; bodyFatPercent?: number | null }>(
+    'SELECT id, weight, date, bodyFatPercent FROM weight_logs ORDER BY date DESC'
+  );
+  return rows.map(r => ({
+    id: r.id,
+    weight: r.weight,
+    date: r.date,
+    ...(r.bodyFatPercent != null && !Number.isNaN(r.bodyFatPercent) ? { bodyFatPercent: r.bodyFatPercent } : {})
+  }));
 };
 
 // CRUD for Water Logs

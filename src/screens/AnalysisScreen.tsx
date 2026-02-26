@@ -118,6 +118,49 @@ export default function AnalysisScreen() {
     };
   }, [weightLogs, userProfile]);
 
+  // --- 3b. Body Fat Change (90 Days) ---
+  const bodyFatChartKitData = useMemo(() => {
+    const now = new Date();
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(now.getDate() - 90);
+
+    const recentLogs = weightLogs
+      .filter(log => log.bodyFatPercent != null && new Date(log.date) >= ninetyDaysAgo)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (recentLogs.length === 0) {
+      return {
+        labels: [''] as string[],
+        datasets: [{ data: [0] as number[] }]
+      };
+    }
+
+    const maxLabels = 5;
+    const labels = recentLogs.map((log, index) => {
+      if (recentLogs.length <= maxLabels) {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+      const step = Math.floor(recentLogs.length / (maxLabels - 1));
+      if (index === 0 || index === recentLogs.length - 1 || (index % step === 0 && index + step < recentLogs.length)) {
+        const d = new Date(log.date);
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+      return '';
+    });
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: recentLogs.map(log => log.bodyFatPercent as number),
+          color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+          strokeWidth: 2
+        }
+      ],
+    };
+  }, [weightLogs]);
+
   // --- 4. Average Macro (7 Days) ---
   const macroSummary = useMemo(() => {
     const dates = generateDateData(7);
@@ -159,12 +202,32 @@ export default function AnalysisScreen() {
     });
 
     const totalDeficit30 = (goal * 30) - totalIntake30 + totalBurn30;
+
+    const dates30ForBodyFat = generateDateData(30);
+    const bodyFatLogs30 = weightLogs.filter(
+      log => log.bodyFatPercent != null && dates30ForBodyFat.includes(log.date)
+    );
+    const sortedBodyFat30 = [...bodyFatLogs30].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    const bodyFatChange30 =
+      sortedBodyFat30.length >= 2
+        ? (sortedBodyFat30[sortedBodyFat30.length - 1].bodyFatPercent as number) -
+          (sortedBodyFat30[0].bodyFatPercent as number)
+        : null;
+    const bodyFatAvg30 =
+      bodyFatLogs30.length > 0
+        ? bodyFatLogs30.reduce((s, l) => s + (l.bodyFatPercent as number), 0) / bodyFatLogs30.length
+        : null;
+
     return {
       avgIntake7: Math.round(totalIntake7 / 7),
       avgBurn7: Math.round(totalBurn7 / 7),
-      projectedWeightLoss: (totalDeficit30 / 7700).toFixed(1)
+      projectedWeightLoss: (totalDeficit30 / 7700).toFixed(1),
+      bodyFatChange30: bodyFatChange30 != null ? bodyFatChange30.toFixed(1) : null,
+      bodyFatAvg30: bodyFatAvg30 != null ? bodyFatAvg30.toFixed(1) : null,
     };
-  }, [foodLogs, exerciseLogs, userProfile]);
+  }, [foodLogs, exerciseLogs, weightLogs, userProfile]);
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -203,6 +266,30 @@ export default function AnalysisScreen() {
                   <Text style={styles.subStatValue}>{stats.avgBurn7}<Text style={styles.subStatUnit}>kcal</Text></Text>
                 </View>
               </View>
+              {stats.bodyFatAvg30 != null && (
+                <View style={styles.subStatItem}>
+                  <View style={[styles.statIconSmall, { backgroundColor: '#2196F320' }]}>
+                    <MaterialCommunityIcons name="human" size={14} color="#2196F3" />
+                  </View>
+                  <View>
+                    <Text style={styles.subStatLabel}>30天平均體脂</Text>
+                    <Text style={styles.subStatValue}>{stats.bodyFatAvg30}<Text style={styles.subStatUnit}>%</Text></Text>
+                  </View>
+                </View>
+              )}
+              {stats.bodyFatChange30 != null && (
+                <View style={styles.subStatItem}>
+                  <View style={[styles.statIconSmall, { backgroundColor: '#2196F320' }]}>
+                    <MaterialCommunityIcons name="trending-down" size={14} color="#2196F3" />
+                  </View>
+                  <View>
+                    <Text style={styles.subStatLabel}>30天體脂變化</Text>
+                    <Text style={styles.subStatValue}>
+                      {Number(stats.bodyFatChange30) >= 0 ? '+' : ''}{stats.bodyFatChange30}<Text style={styles.subStatUnit}>%</Text>
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </LinearGradient>
@@ -347,6 +434,48 @@ export default function AnalysisScreen() {
               segments={4}
             />
           </View>
+        </View>
+
+        {/* 90-Day Body Fat Chart */}
+        <View style={[styles.chartCard, { marginBottom: 40 }]}>
+          <View style={styles.chartHeader}>
+            <View style={[styles.chartIconBox, { backgroundColor: '#E3F2FD' }]}>
+              <MaterialCommunityIcons name="human" size={18} color="#2196F3" />
+            </View>
+            <Text style={styles.chartTitle}>體脂率變化趨勢 (%)</Text>
+          </View>
+          {bodyFatChartKitData.datasets[0].data.length > 0 &&
+          !(bodyFatChartKitData.labels.length === 1 && bodyFatChartKitData.labels[0] === '' && bodyFatChartKitData.datasets[0].data[0] === 0) ? (
+            <View style={styles.chartKitWrapper}>
+              <KitLineChart
+                data={bodyFatChartKitData}
+                width={chartWidth}
+                height={180}
+                chartConfig={{
+                  backgroundColor: '#ffffff',
+                  backgroundGradientFrom: '#ffffff',
+                  backgroundGradientTo: '#ffffff',
+                  decimalPlaces: 1,
+                  color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
+                  propsForLabels: { fontSize: 9 },
+                  propsForDots: { r: '4', strokeWidth: '1.5', stroke: '#2196F3' },
+                  propsForBackgroundLines: { strokeDasharray: '', stroke: '#F4F4F4', strokeWidth: 1 },
+                }}
+                bezier={true}
+                withInnerLines={true}
+                withOuterLines={false}
+                withShadow={false}
+                style={{ marginLeft: -16 }}
+                fromZero={false}
+                segments={4}
+              />
+            </View>
+          ) : (
+            <View style={{ height: 180, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ color: '#999' }}>尚無體脂率數據</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
