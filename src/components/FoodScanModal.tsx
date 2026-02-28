@@ -27,6 +27,9 @@ import FoodTagEditorModal from './FoodTagEditorModal';
 const SECURE_KEY = 'gemini_api_key';
 const DEFAULT_FOOD_TAGS = ['大碗', '小份', '半份', '加蛋', '少油'];
 
+const PORTION_MULTIPLIER_MIN = 0.01;
+const PORTION_MULTIPLIER_MAX = 10;
+
 interface FoodScanModalProps {
   visible: boolean;
   onClose: () => void;
@@ -72,6 +75,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>(getMealTypeByTime());
   const [showTagEditor, setShowTagEditor] = useState(false);
+  const [portionMultiplier, setPortionMultiplier] = useState('1');
 
   const resetAll = () => {
     setStage('idle');
@@ -87,6 +91,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setManualCarbs('');
     setManualFat('');
     setSelectedMealType(getMealTypeByTime());
+    setPortionMultiplier('1');
   };
 
   const pickImage = async (useCamera: boolean) => {
@@ -189,12 +194,22 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   };
 
   const handleConfirm = () => {
+    const rawMultiplier = parseFloat(portionMultiplier);
+    const multiplier = Number.isNaN(rawMultiplier)
+      ? 1
+      : Math.max(PORTION_MULTIPLIER_MIN, Math.min(PORTION_MULTIPLIER_MAX, rawMultiplier));
+
+    const baseCalories = parseInt(editCalories, 10) || 0;
+    const baseProtein = parseInt(editProtein, 10) || 0;
+    const baseCarbs = parseInt(editCarbs, 10) || 0;
+    const baseFat = parseInt(editFat, 10) || 0;
+
     const confirmed: FoodAnalysisResult = {
       name: editName,
-      calories: parseInt(editCalories) || 0,
-      protein: parseInt(editProtein) || 0,
-      carbs: parseInt(editCarbs) || 0,
-      fat: parseInt(editFat) || 0,
+      calories: Math.round(baseCalories * multiplier),
+      protein: Math.round(baseProtein * multiplier),
+      carbs: Math.round(baseCarbs * multiplier),
+      fat: Math.round(baseFat * multiplier),
     };
     onConfirm(confirmed, selectedMealType);
     resetAll();
@@ -389,6 +404,25 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           unit="g"
           proportion={parseInt(editFat) / macroGoals.fat}
         />
+
+        <View style={styles.portionMultiplierSection}>
+          <Text style={styles.resultFieldLabel}>份量倍數</Text>
+          <Text style={styles.portionMultiplierHint}>
+            若實際份量較少可輸入小於 1，例如 0.5 表示半份
+          </Text>
+          <TextInput
+            style={styles.portionMultiplierInput}
+            placeholder="1"
+            placeholderTextColor="#BBB"
+            value={portionMultiplier}
+            onChangeText={(text) => {
+              const filtered = text.replace(/[^\d.]/g, '');
+              const parts = filtered.split('.');
+              if (parts.length <= 2) setPortionMultiplier(parts.join('.'));
+            }}
+            keyboardType="decimal-pad"
+          />
+        </View>
 
         <View style={styles.mealTypeSection}>
           <Text style={styles.resultFieldLabel}>用餐時段</Text>
@@ -878,6 +912,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#FAFAFA',
+  },
+  portionMultiplierSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 0.5,
+    borderTopColor: '#EEE',
+  },
+  portionMultiplierHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  portionMultiplierInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#FAFAFA',
+    maxWidth: 100,
   },
   mealTypeSection: {
     marginTop: 15,

@@ -5,7 +5,9 @@ import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-ico
 import Constants from 'expo-constants';
 import { useAppContext } from '../context/AppContext';
 import { EXERCISE_TYPES } from '../constants/exercises';
+import { FoodLog } from '../types';
 import DatePickerModal from '../components/DatePickerModal';
+import EditFoodModal from '../components/EditFoodModal';
 import ExerciseFavoriteModal from '../components/ExerciseFavoriteModal';
 import FoodScanModal from '../components/FoodScanModal';
 import { calculateMacroGoals } from '../utils/fitness';
@@ -13,12 +15,13 @@ import { calculateMacroGoals } from '../utils/fitness';
 type TabType = 'DIET' | 'EXERCISE';
 
 export default function LogScreen() {
-  const { userProfile, exerciseLogs, addExerciseLog, deleteExerciseLog, foodLogs, addFoodLog, deleteFoodLog } = useAppContext();
+  const { userProfile, exerciseLogs, addExerciseLog, deleteExerciseLog, foodLogs, addFoodLog, updateFoodLog, deleteFoodLog } = useAppContext();
   const [activeTab, setActiveTab] = useState<TabType>('DIET');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [favoriteModalVisible, setFavoriteModalVisible] = useState(false);
   const [foodScanModalVisible, setFoodScanModalVisible] = useState(false);
+  const [editingFoodLog, setEditingFoodLog] = useState<FoodLog | null>(null);
 
   // Macro Calculations for summary
   const currentFoodLogs = foodLogs.filter(log => log.date === selectedDate);
@@ -148,9 +151,14 @@ export default function LogScreen() {
                 />
               </View>
             </View>
-            <TouchableOpacity onPress={() => deleteFoodLog(log.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={18} color="#C7C7CC" />
-            </TouchableOpacity>
+            <View style={styles.dietLogActions}>
+              <TouchableOpacity onPress={() => setEditingFoodLog(log)} style={styles.editBtn}>
+                <Ionicons name="pencil-outline" size={18} color="#C7C7CC" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => deleteFoodLog(log.id)} style={styles.deleteBtn}>
+                <Ionicons name="trash-outline" size={18} color="#C7C7CC" />
+              </TouchableOpacity>
+            </View>
           </View>
         ))
       ) : (
@@ -296,6 +304,18 @@ export default function LogScreen() {
         onClose={() => setFoodScanModalVisible(false)}
         onConfirm={handleFoodScanConfirm}
         date={selectedDate}
+      />
+
+      <EditFoodModal
+        visible={editingFoodLog !== null}
+        log={editingFoodLog}
+        onClose={() => setEditingFoodLog(null)}
+        onSave={(updated) => {
+          const { id, ...updates } = updated;
+          updateFoodLog(id, updates);
+          setEditingFoodLog(null);
+          Alert.alert('成功', '已更新飲食紀錄');
+        }}
       />
     </SafeAreaView>
   );
@@ -523,6 +543,8 @@ const styles = StyleSheet.create({
   miniMacroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 },
   miniBarBg: { height: 3, backgroundColor: '#F2F2F7', borderRadius: 1.5, overflow: 'hidden' },
   miniBarFill: { height: '100%', borderRadius: 1.5 },
+  dietLogActions: { flexDirection: 'row', alignItems: 'center' },
+  editBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   deleteBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });
 

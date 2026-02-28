@@ -14,6 +14,7 @@ interface AppContextType {
   exerciseLogs: ExerciseLog[];
   setUserProfile: (profile: UserProfile) => void;
   addFoodLog: (log: Omit<FoodLog, 'id'>) => void;
+  updateFoodLog: (id: string, updates: Partial<Omit<FoodLog, 'id'>>) => void;
   deleteFoodLog: (id: string) => void;
   addWeightLog: (log: Omit<WeightLog, 'id'>) => void;
   deleteWeightLog: (id: string) => void;
@@ -178,6 +179,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateFoodLog = async (id: string, updates: Partial<Omit<FoodLog, 'id'>>) => {
+    const existing = foodLogs.find(l => l.id === id);
+    if (!existing) return;
+    const updatedLog: FoodLog = { ...existing, ...updates };
+    const updated = foodLogs.map(l => (l.id === id ? updatedLog : l));
+    setFoodLogs(updated);
+    if (dbRef.current) {
+      await dbService.saveFoodLog(dbRef.current, updatedLog);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.FOOD_LOGS, JSON.stringify(updated));
+    }
+  };
+
   const deleteFoodLog = async (id: string) => {
     const updated = foodLogs.filter(l => l.id !== id);
     setFoodLogs(updated);
@@ -293,6 +307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exerciseLogs,
     setUserProfile,
     addFoodLog,
+    updateFoodLog,
     deleteFoodLog,
     addWeightLog,
     deleteWeightLog,
