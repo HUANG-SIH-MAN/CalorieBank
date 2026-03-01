@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAppContext } from '../context/AppContext';
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
+import { ENABLE_GOOGLE_DRIVE_SYNC } from '../constants/features';
 import { RESTORE_CONFIRM } from '../constants/onboarding';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
 import { UserProfile } from '../types';
@@ -434,60 +435,64 @@ export default function SettingsScreen() {
           <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
         </View>
 
-        {/* Section: Data Backup & Sync */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>數據備份與同步</Text>
-          <View style={styles.card}>
-            <View style={styles.cardBody}>
-              <Text style={styles.syncDesc}>
-                您可以將所有飲食與體重紀錄備份到您的 Google Drive (AppData 隱藏資料夾)。切換手機時可輕鬆還原。
-              </Text>
+        {ENABLE_GOOGLE_DRIVE_SYNC && (
+          <>
+            {/* Section: Data Backup & Sync */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>數據備份與同步</Text>
+              <View style={styles.card}>
+                <View style={styles.cardBody}>
+                  <Text style={styles.syncDesc}>
+                    您可以將所有飲食與體重紀錄備份到您的 Google Drive (AppData 隱藏資料夾)。切換手機時可輕鬆還原。
+                  </Text>
 
-              <View style={styles.syncButtonGroup}>
-                <TouchableOpacity
-                  style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
-                  onPress={handleBackup}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
-                  ) : (
-                    <Ionicons name="cloud-upload-outline" size={20} color="#007AFF" />
-                  )}
-                  <Text style={styles.syncBtnText}>立即備份</Text>
-                </TouchableOpacity>
+                  <View style={styles.syncButtonGroup}>
+                    <TouchableOpacity
+                      style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
+                      onPress={handleBackup}
+                      disabled={isSyncing}
+                    >
+                      {isSyncing ? (
+                        <ActivityIndicator size="small" color="#007AFF" />
+                      ) : (
+                        <Ionicons name="cloud-upload-outline" size={20} color="#007AFF" />
+                      )}
+                      <Text style={styles.syncBtnText}>立即備份</Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
-                  onPress={handleRestore}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <ActivityIndicator size="small" color="#007AFF" />
+                    <TouchableOpacity
+                      style={[styles.syncBtn, isSyncing && styles.syncBtnDisabled]}
+                      onPress={handleRestore}
+                      disabled={isSyncing}
+                    >
+                      {isSyncing ? (
+                        <ActivityIndicator size="small" color="#007AFF" />
+                      ) : (
+                        <Ionicons name="cloud-download-outline" size={20} color="#007AFF" />
+                      )}
+                      <Text style={styles.syncBtnText}>還原數據</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={[styles.itemRow, { borderTopWidth: 0.5, borderTopColor: '#F0F0F0', borderBottomWidth: 0 }]}>
+                  <Text style={styles.itemLabel}>Google 帳號</Text>
+                  {googleUser ? (
+                    <TouchableOpacity onPress={handleGoogleSignOut} style={styles.googleAccountBtn}>
+                      <Text style={styles.googleAccountText}>{googleUser.name}</Text>
+                      <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+                    </TouchableOpacity>
                   ) : (
-                    <Ionicons name="cloud-download-outline" size={20} color="#007AFF" />
+                    <TouchableOpacity onPress={handleGoogleSignIn} style={styles.googleAccountBtn}>
+                      <Text style={styles.googleAccountText}>未連結</Text>
+                      <Ionicons name="log-in-outline" size={20} color="#007AFF" />
+                    </TouchableOpacity>
                   )}
-                  <Text style={styles.syncBtnText}>還原數據</Text>
-                </TouchableOpacity>
+                </View>
               </View>
             </View>
-
-            <View style={[styles.itemRow, { borderTopWidth: 0.5, borderTopColor: '#F0F0F0', borderBottomWidth: 0 }]}>
-              <Text style={styles.itemLabel}>Google 帳號</Text>
-              {googleUser ? (
-                <TouchableOpacity onPress={handleGoogleSignOut} style={styles.googleAccountBtn}>
-                  <Text style={styles.googleAccountText}>{googleUser.name}</Text>
-                  <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleGoogleSignIn} style={styles.googleAccountBtn}>
-                  <Text style={styles.googleAccountText}>未連結</Text>
-                  <Ionicons name="log-in-outline" size={20} color="#007AFF" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </View>
+          </>
+        )}
 
         {/* Section: Danger Zone */}
         <View style={[styles.section, { marginTop: 20 }]}>

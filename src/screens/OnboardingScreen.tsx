@@ -18,6 +18,7 @@ import { UserProfile } from '../types';
 
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
 import { AI_CONSENT } from '../constants/aiConsent';
+import { ENABLE_GOOGLE_DRIVE_SYNC } from '../constants/features';
 import { CLOUD_IMPORT, CLOUD_IMPORT_WARNING } from '../constants/onboarding';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
 import * as googleDrive from '../services/googleDriveService';
@@ -28,7 +29,9 @@ type CloudImportChoice = 'pending' | 'skip';
 
 export default function OnboardingScreen() {
   const { setUserProfile, reloadFromDatabase, applyRestoredData } = useAppContext();
-  const [cloudImportChoice, setCloudImportChoice] = useState<CloudImportChoice>('pending');
+  const [cloudImportChoice, setCloudImportChoice] = useState<CloudImportChoice>(
+    ENABLE_GOOGLE_DRIVE_SYNC ? 'pending' : 'skip'
+  );
   const [step, setStep] = useState(0);
   const [step4ConsentChecked, setStep4ConsentChecked] = useState(false);
   const [showConsentDetailModal, setShowConsentDetailModal] = useState(false);
