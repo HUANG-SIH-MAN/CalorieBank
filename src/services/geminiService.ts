@@ -44,10 +44,12 @@ export async function analyzeFoodImage(
 3. 嚴禁回傳 0 kcal 或 未知食物（除非圖片完全與食物無關）。
 4. 以一人份為估算基準。${hintLine}
 
-請嚴格以 JSON 格式回傳（數字部分請給整數）：
+請嚴格以 JSON 格式回傳：
+- "calories" 請給整數（大卡）。
+- "protein"、"carbs"、"fat" 可為小數，至小數第一位（例如 12.5）。
 {
   "name": "食物名稱（例如：紅燒獅子頭、番茄牛肉麵）",
-  "calories": 大卡,
+  "calories": 大卡_整數,
   "protein": 蛋白質克數,
   "carbs": 碳水化合物克數,
   "fat": 脂肪克數
@@ -88,12 +90,14 @@ export async function analyzeFoodImage(
       throw new Error('AI 回傳格式不正確');
     }
 
+    const ONE_DECIMAL_FACTOR = 10;
+    const roundToOneDecimal = (n: number) => Math.round((n || 0) * ONE_DECIMAL_FACTOR) / ONE_DECIMAL_FACTOR;
     return {
       name: parsed.name || '未知食物',
       calories: Math.round(parsed.calories || 0),
-      protein: Math.round(parsed.protein || 0),
-      carbs: Math.round(parsed.carbs || 0),
-      fat: Math.round(parsed.fat || 0),
+      protein: roundToOneDecimal(parsed.protein),
+      carbs: roundToOneDecimal(parsed.carbs),
+      fat: roundToOneDecimal(parsed.fat),
     };
   } catch (error: any) {
     console.error('Gemini Analysis Error:', error);

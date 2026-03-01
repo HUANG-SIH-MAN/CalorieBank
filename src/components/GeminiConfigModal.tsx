@@ -39,7 +39,8 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
   const [selectedModel, setSelectedModel] = useState(userProfile?.geminiModel || 'gemini-2.5-flash');
   const [customModel, setCustomModel] = useState('');
   const [isCustomModel, setIsCustomModel] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [dynamicModels, setDynamicModels] = useState<{ id: string; name: string }[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
 
@@ -57,8 +58,10 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
     }
   };
 
-  const handleValidateAndSave = async () => {
-    const finalModel = isCustomModel ? customModel : selectedModel;
+  const getFinalModel = () => (isCustomModel ? customModel : selectedModel);
+
+  const handleSaveOnly = async () => {
+    const finalModel = getFinalModel();
     if (!apiKey.trim()) {
       Alert.alert('提示', '請輸入 API Key');
       return;
@@ -68,31 +71,47 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
       return;
     }
 
-    setIsValidating(true);
+    setIsSaving(true);
     try {
-      await validateGeminiKey(apiKey.trim(), finalModel);
-
-      // Save key securely
       if (Platform.OS !== 'web') {
         await SecureStore.setItemAsync(SECURE_KEY, apiKey.trim());
       } else {
         (global as any).__geminiKey = apiKey.trim();
       }
-
-      // Save model in profile
       if (userProfile) {
         setUserProfile({
           ...userProfile,
           geminiModel: finalModel,
         });
       }
-
-      Alert.alert('成功', 'AI 設定已儲存成功！現在可以開始辨識食物了。');
+      Alert.alert('成功', 'AI 設定已儲存！現在可以開始辨識食物了。');
       onSuccess();
+    } catch (error: any) {
+      Alert.alert('儲存失敗', error.message || '無法儲存設定，請稍後再試');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleVerifyOnly = async () => {
+    const finalModel = getFinalModel();
+    if (!apiKey.trim()) {
+      Alert.alert('提示', '請輸入 API Key');
+      return;
+    }
+    if (isCustomModel && !customModel.trim()) {
+      Alert.alert('提示', '請輸入自定義型號名稱');
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      await validateGeminiKey(apiKey.trim(), finalModel);
+      Alert.alert('驗證成功', '此 API Key 與型號可正常連線。');
     } catch (error: any) {
       Alert.alert('驗證失敗', error.message || '請檢查 API Key 或型號是否正確');
     } finally {
-      setIsValidating(false);
+      setIsVerifying(false);
     }
   };
 
@@ -154,6 +173,7 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
         <TextInput
           style={styles.textInput}
           placeholder="例如：AIzaSy..."
+          placeholderTextColor="#999"
           value={apiKey}
           onChangeText={setApiKey}
           secureTextEntry
@@ -266,15 +286,32 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
         )}
       </View>
 
+      <Text style={styles.stepHint}>儲存後可直接使用；若遇問題可先按連線驗證檢查。</Text>
+
       <TouchableOpacity
-        style={styles.primaryBtn}
-        onPress={handleValidateAndSave}
-        disabled={isValidating}
+        style={[styles.primaryBtn, isSaving && styles.disabledBtn]}
+        onPress={handleSaveOnly}
+        disabled={isSaving}
       >
-        {isValidating ? (
+        {isSaving ? (
           <ActivityIndicator color="#FFF" />
         ) : (
-          <Text style={styles.primaryBtnText}>驗證並儲存</Text>
+          <Text style={styles.primaryBtnText}>直接儲存</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.secondaryBtn, isVerifying && styles.disabledBtn]}
+        onPress={handleVerifyOnly}
+        disabled={isVerifying}
+      >
+        {isVerifying ? (
+          <ActivityIndicator color="#007AFF" />
+        ) : (
+          <View style={styles.secondaryBtnContent}>
+            <Ionicons name="cloud-done-outline" size={18} color="#007AFF" />
+            <Text style={styles.secondaryBtnText}>連線驗證</Text>
+          </View>
         )}
       </TouchableOpacity>
 
@@ -388,6 +425,35 @@ const styles = StyleSheet.create({
   },
   disabledBtn: {
     backgroundColor: '#CCC',
+  },
+  stepHint: {
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 14,
+    marginTop: 12,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    backgroundColor: 'transparent',
+  },
+  secondaryBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  secondaryBtnText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   linkBtn: {
     flexDirection: 'row',

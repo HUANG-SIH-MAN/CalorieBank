@@ -29,6 +29,11 @@ const DEFAULT_FOOD_TAGS = ['大碗', '小份', '半份', '加蛋', '少油'];
 
 const PORTION_MULTIPLIER_MIN = 0.01;
 const PORTION_MULTIPLIER_MAX = 10;
+const NUTRITION_DECIMAL_FACTOR = 10;
+
+function roundNutritionToOneDecimal(value: number): number {
+  return Math.round(value * NUTRITION_DECIMAL_FACTOR) / NUTRITION_DECIMAL_FACTOR;
+}
 
 interface FoodScanModalProps {
   visible: boolean;
@@ -200,16 +205,16 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       : Math.max(PORTION_MULTIPLIER_MIN, Math.min(PORTION_MULTIPLIER_MAX, rawMultiplier));
 
     const baseCalories = parseInt(editCalories, 10) || 0;
-    const baseProtein = parseInt(editProtein, 10) || 0;
-    const baseCarbs = parseInt(editCarbs, 10) || 0;
-    const baseFat = parseInt(editFat, 10) || 0;
+    const baseProtein = parseFloat(editProtein) || 0;
+    const baseCarbs = parseFloat(editCarbs) || 0;
+    const baseFat = parseFloat(editFat) || 0;
 
     const confirmed: FoodAnalysisResult = {
       name: editName,
       calories: Math.round(baseCalories * multiplier),
-      protein: Math.round(baseProtein * multiplier),
-      carbs: Math.round(baseCarbs * multiplier),
-      fat: Math.round(baseFat * multiplier),
+      protein: roundNutritionToOneDecimal(baseProtein * multiplier),
+      carbs: roundNutritionToOneDecimal(baseCarbs * multiplier),
+      fat: roundNutritionToOneDecimal(baseFat * multiplier),
     };
     onConfirm(confirmed, selectedMealType);
     resetAll();
@@ -221,12 +226,15 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
       Alert.alert('請填寫', '至少需要填寫食物名稱和卡路里');
       return;
     }
+    const manualProteinNum = parseFloat(manualProtein);
+    const manualCarbsNum = parseFloat(manualCarbs);
+    const manualFatNum = parseFloat(manualFat);
     const manual: FoodAnalysisResult = {
       name: manualName.trim(),
       calories: parseInt(manualCalories) || 0,
-      protein: parseInt(manualProtein) || 0,
-      carbs: parseInt(manualCarbs) || 0,
-      fat: parseInt(manualFat) || 0,
+      protein: roundNutritionToOneDecimal(Number.isNaN(manualProteinNum) ? 0 : manualProteinNum),
+      carbs: roundNutritionToOneDecimal(Number.isNaN(manualCarbsNum) ? 0 : manualCarbsNum),
+      fat: roundNutritionToOneDecimal(Number.isNaN(manualFatNum) ? 0 : manualFatNum),
     };
     onConfirm(manual, selectedMealType);
     resetAll();
@@ -388,21 +396,21 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           value={editProtein}
           onChangeText={setEditProtein}
           unit="g"
-          proportion={parseInt(editProtein) / macroGoals.protein}
+          proportion={(parseFloat(editProtein) || 0) / macroGoals.protein}
         />
         <ResultField
           label="碳水化合物"
           value={editCarbs}
           onChangeText={setEditCarbs}
           unit="g"
-          proportion={parseInt(editCarbs) / macroGoals.carbs}
+          proportion={(parseFloat(editCarbs) || 0) / macroGoals.carbs}
         />
         <ResultField
           label="脂肪"
           value={editFat}
           onChangeText={setEditFat}
           unit="g"
-          proportion={parseInt(editFat) / macroGoals.fat}
+          proportion={(parseFloat(editFat) || 0) / macroGoals.fat}
         />
 
         <View style={styles.portionMultiplierSection}>

@@ -79,6 +79,11 @@ export const initDatabase = async () => {
   } catch (_e) {
     // Column already exists on new installs
   }
+  try {
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN customFoodTags TEXT;');
+  } catch (_e) {
+    // Column already exists on new installs
+  }
 
   return db;
 };
@@ -89,8 +94,8 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
     `INSERT OR REPLACE INTO user_profile (
       id, name, age, gender, height, weight, goalWeight, activityLevel, 
       weightChangeSpeed, dailyCalorieGoal, waterGoal, waterContainers, 
-      favoriteExerciseIds, customExercises, stepGoal, geminiModel, bodyFatPercent
-    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      favoriteExerciseIds, customExercises, stepGoal, geminiModel, customFoodTags, bodyFatPercent
+    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       profile.name, profile.age, profile.gender, profile.height, profile.weight, 
       profile.goalWeight, profile.activityLevel, profile.weightChangeSpeed || null, 
@@ -100,6 +105,7 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
       JSON.stringify(profile.customExercises || []),
       profile.stepGoal || null,
       profile.geminiModel || null,
+      JSON.stringify(profile.customFoodTags || []),
       profile.bodyFatPercent ?? null
     ]
   );
@@ -111,10 +117,15 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     goalWeight: number, activityLevel: any, weightChangeSpeed: any, 
     dailyCalorieGoal: number, waterGoal: number, waterContainers: string, 
     favoriteExerciseIds: string, customExercises: string, stepGoal: number, geminiModel: string,
+    customFoodTags?: string,
     bodyFatPercent?: number
   }>('SELECT * FROM user_profile WHERE id = 1');
 
   if (!row) return null;
+
+  const customFoodTags = row.customFoodTags
+    ? JSON.parse(row.customFoodTags) as string[]
+    : undefined;
 
   return {
     name: row.name,
@@ -132,6 +143,7 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     customExercises: JSON.parse(row.customExercises),
     stepGoal: row.stepGoal,
     geminiModel: row.geminiModel,
+    ...(customFoodTags !== undefined ? { customFoodTags } : {}),
     bodyFatPercent: row.bodyFatPercent ?? undefined
   };
 };

@@ -15,6 +15,12 @@ import { FoodLog } from '../types';
 import { MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 import DatePickerModal from './DatePickerModal';
 
+const NUTRITION_DECIMAL_FACTOR = 10;
+
+function roundNutritionToOneDecimal(value: number): number {
+  return Math.round(value * NUTRITION_DECIMAL_FACTOR) / NUTRITION_DECIMAL_FACTOR;
+}
+
 interface EditFoodModalProps {
   visible: boolean;
   log: FoodLog | null;
@@ -47,9 +53,12 @@ export default function EditFoodModal({ visible, log, onClose, onSave }: EditFoo
   const handleSave = () => {
     if (!log) return;
     const caloriesNum = parseInt(calories, 10);
-    const proteinNum = parseInt(protein, 10) || 0;
-    const carbsNum = parseInt(carbs, 10) || 0;
-    const fatNum = parseInt(fat, 10) || 0;
+    const proteinRaw = parseFloat(protein);
+    const carbsRaw = parseFloat(carbs);
+    const fatRaw = parseFloat(fat);
+    const proteinNum = roundNutritionToOneDecimal(Number.isNaN(proteinRaw) || proteinRaw < 0 ? 0 : proteinRaw);
+    const carbsNum = roundNutritionToOneDecimal(Number.isNaN(carbsRaw) || carbsRaw < 0 ? 0 : carbsRaw);
+    const fatNum = roundNutritionToOneDecimal(Number.isNaN(fatRaw) || fatRaw < 0 ? 0 : fatRaw);
     if (!name.trim()) {
       Alert.alert('請填寫', '請輸入食物名稱');
       return;
@@ -122,7 +131,7 @@ export default function EditFoodModal({ visible, log, onClose, onSave }: EditFoo
                 placeholderTextColor="#BBB"
                 value={protein}
                 onChangeText={setProtein}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.field}>
@@ -133,7 +142,7 @@ export default function EditFoodModal({ visible, log, onClose, onSave }: EditFoo
                 placeholderTextColor="#BBB"
                 value={carbs}
                 onChangeText={setCarbs}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.field}>
@@ -144,7 +153,7 @@ export default function EditFoodModal({ visible, log, onClose, onSave }: EditFoo
                 placeholderTextColor="#BBB"
                 value={fat}
                 onChangeText={setFat}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
               />
             </View>
             <View style={styles.field}>

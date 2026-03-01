@@ -80,6 +80,7 @@ export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEd
           <TextInput
             style={styles.input}
             placeholder="新增標籤 (ex: 少鹽...)"
+            placeholderTextColor="#999"
             value={newTag}
             onChangeText={setNewTag}
             maxLength={10}

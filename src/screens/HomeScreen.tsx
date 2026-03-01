@@ -439,11 +439,9 @@ export default function HomeScreen() {
             ...(bodyFat != null ? { bodyFatPercent: bodyFat } : {}),
           })
         }
-        currentWeight={displayWeight}
+        currentWeight={userProfile?.weight}
         initialDate={selectedDate}
-        initialBodyFatPercent={
-          latestLogWithBodyFat?.bodyFatPercent ?? userProfile?.bodyFatPercent ?? undefined
-        }
+        initialBodyFatPercent={userProfile?.bodyFatPercent ?? undefined}
       />
 
       <WaterLogModal

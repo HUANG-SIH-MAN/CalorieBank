@@ -211,6 +211,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_LOGS, JSON.stringify(updated));
     }
+    if (userProfile) {
+      setUserProfile({
+        ...userProfile,
+        weight: newLog.weight,
+        ...(newLog.bodyFatPercent != null ? { bodyFatPercent: newLog.bodyFatPercent } : {}),
+      });
+    }
   };
 
   const deleteWeightLog = async (id: string) => {

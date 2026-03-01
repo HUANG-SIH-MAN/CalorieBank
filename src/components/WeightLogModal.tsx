@@ -96,7 +96,7 @@ export default function WeightLogModal({
                 placeholderTextColor="#CCC"
                 autoFocus
               />
-              <Text style={styles.unitText}>千克</Text>
+              <Text style={styles.unitText}>公斤</Text>
             </View>
           </View>
 
