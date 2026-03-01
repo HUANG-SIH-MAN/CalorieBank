@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog } from '../types';
+import type { WebBackupData } from '../services/googleDriveService';
 import * as dbService from '../services/dbService';
 
 interface AppContextType {
@@ -23,6 +24,8 @@ interface AppContextType {
   addExerciseLog: (log: Omit<ExerciseLog, 'id'>) => void;
   deleteExerciseLog: (id: string) => void;
   resetAppData: () => Promise<void>;
+  reloadFromDatabase: () => Promise<void>;
+  applyRestoredData: (data: WebBackupData) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -306,6 +309,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const reloadFromDatabase = async () => {
+    if (Platform.OS === 'web' || !dbRef.current) return;
+    try {
+      const db = await dbService.initDatabase();
+      if (!db) return;
+      dbRef.current = db;
+      await loadData(db);
+    } catch (error) {
+      console.error('Failed to reload from database', error);
+    }
+  };
+
+  const applyRestoredData = async (data: WebBackupData) => {
+    if (dbRef.current) return;
+    const profile = data.userProfile as UserProfile | null;
+    const foods = (data.foodLogs || []) as FoodLog[];
+    const weights = (data.weightLogs || []) as WeightLog[];
+    const waters = (data.waterLogs || []) as WaterLog[];
+    const exercises = (data.exerciseLogs || []) as ExerciseLog[];
+    setProfileState(profile ?? null);
+    setFoodLogs(foods);
+    setWeightLogs(weights);
+    setWaterLogs(waters);
+    setExerciseLogs(exercises);
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+    await AsyncStorage.setItem(STORAGE_KEYS.FOOD_LOGS, JSON.stringify(foods));
+    await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_LOGS, JSON.stringify(weights));
+    await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(waters));
+    await AsyncStorage.setItem(STORAGE_KEYS.EXERCISE_LOGS, JSON.stringify(exercises));
+  };
+
   const value = useMemo(() => ({
     userProfile,
     foodLogs,
@@ -323,6 +357,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addExerciseLog,
     deleteExerciseLog,
     resetAppData,
+    reloadFromDatabase,
+    applyRestoredData,
     isLoading,
   }), [userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, isLoading]);
 

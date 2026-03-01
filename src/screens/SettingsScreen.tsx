@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAppContext } from '../context/AppContext';
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
+import { RESTORE_CONFIRM } from '../constants/onboarding';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
 import { UserProfile } from '../types';
 import * as googleDrive from '../services/googleDriveService';
@@ -31,7 +32,17 @@ const getStoredKey = async () => {
 };
 
 export default function SettingsScreen() {
-  const { userProfile, setUserProfile, resetAppData } = useAppContext();
+  const {
+    userProfile,
+    setUserProfile,
+    resetAppData,
+    reloadFromDatabase,
+    applyRestoredData,
+    foodLogs,
+    weightLogs,
+    waterLogs,
+    exerciseLogs,
+  } = useAppContext();
 
   // Profile editing
   const [isEditing, setIsEditing] = useState(false);
@@ -111,10 +122,20 @@ export default function SettingsScreen() {
     }
     setIsSyncing(true);
     try {
-      const result = await googleDrive.backupToDrive(googleUser.token);
+      const result =
+        Platform.OS === 'web'
+          ? await googleDrive.backupToDriveWeb(googleUser.token, {
+              userProfile: userProfile ?? null,
+              foodLogs,
+              weightLogs,
+              waterLogs,
+              exerciseLogs,
+            })
+          : await googleDrive.backupToDrive(googleUser.token);
       Alert.alert(result.success ? '成功' : '失敗', result.message);
-    } catch (error: any) {
-      Alert.alert('錯誤', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '備份失敗';
+      Alert.alert('錯誤', message);
     } finally {
       setIsSyncing(false);
     }
@@ -126,24 +147,36 @@ export default function SettingsScreen() {
       return;
     }
     Alert.alert(
-      '確認還原',
-      '還原數據將會覆蓋您目前手機上的所有資料，建議先進行備份。確定要繼續嗎？',
+      RESTORE_CONFIRM.title,
+      RESTORE_CONFIRM.message,
       [
-        { text: '取消', style: 'cancel' },
+        { text: RESTORE_CONFIRM.cancel, style: 'cancel' },
         {
-          text: '確定還原',
+          text: RESTORE_CONFIRM.confirm,
           style: 'destructive',
           onPress: async () => {
             setIsSyncing(true);
             try {
-              const result = await googleDrive.restoreFromDrive(googleUser.token);
-              if (result.success) {
-                Alert.alert('還原成功', '資料已回復，請重新啟動 App。');
+              if (Platform.OS === 'web') {
+                const result = await googleDrive.restoreFromDriveWeb(googleUser.token);
+                if (result.success && result.data) {
+                  await applyRestoredData(result.data);
+                  Alert.alert('還原成功', '資料已載入。');
+                } else {
+                  Alert.alert('失敗', result.message);
+                }
               } else {
-                Alert.alert('失敗', result.message);
+                const result = await googleDrive.restoreFromDrive(googleUser.token);
+                if (result.success) {
+                  await reloadFromDatabase();
+                  Alert.alert('還原成功', '資料已載入。');
+                } else {
+                  Alert.alert('失敗', result.message);
+                }
               }
-            } catch (error: any) {
-              Alert.alert('錯誤', error.message);
+            } catch (error: unknown) {
+              const message = error instanceof Error ? error.message : '還原失敗';
+              Alert.alert('錯誤', message);
             } finally {
               setIsSyncing(false);
             }

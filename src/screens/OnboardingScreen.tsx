@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,15 +18,21 @@ import { UserProfile } from '../types';
 
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
 import { AI_CONSENT } from '../constants/aiConsent';
+import { CLOUD_IMPORT, CLOUD_IMPORT_WARNING } from '../constants/onboarding';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
+import * as googleDrive from '../services/googleDriveService';
 
 const TOTAL_STEPS = 5;
 
+type CloudImportChoice = 'pending' | 'skip';
+
 export default function OnboardingScreen() {
-  const { setUserProfile } = useAppContext();
+  const { setUserProfile, reloadFromDatabase, applyRestoredData } = useAppContext();
+  const [cloudImportChoice, setCloudImportChoice] = useState<CloudImportChoice>('pending');
   const [step, setStep] = useState(0);
   const [step4ConsentChecked, setStep4ConsentChecked] = useState(false);
   const [showConsentDetailModal, setShowConsentDetailModal] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Form State
   const [gender, setGender] = useState<'MALE' | 'FEMALE'>('MALE');
@@ -47,6 +54,68 @@ export default function OnboardingScreen() {
       goalWeight: parseFloat(goalWeight) || 0,
       speedId: speed,
     });
+  };
+
+  const showConfirm = (title: string, message: string): Promise<boolean> => {
+    if (Platform.OS === 'web') {
+      return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+    }
+    return new Promise((resolve) => {
+      Alert.alert(title, message, [
+        { text: CLOUD_IMPORT_WARNING.cancel, style: 'cancel', onPress: () => resolve(false) },
+        { text: CLOUD_IMPORT_WARNING.confirm, onPress: () => resolve(true) },
+      ]);
+    });
+  };
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const handleCloudImport = async () => {
+    const confirmed = await showConfirm(CLOUD_IMPORT_WARNING.title, CLOUD_IMPORT_WARNING.message);
+    if (!confirmed) return;
+
+    setIsImporting(true);
+    try {
+      const token = await googleDrive.googleLogin();
+      if (!token) {
+        showAlert('錯誤', '無法取得登入憑證');
+        setCloudImportChoice('skip');
+        setStep(0);
+        return;
+      }
+      if (Platform.OS === 'web') {
+        const result = await googleDrive.restoreFromDriveWeb(token);
+        if (result.success && result.data) {
+          await applyRestoredData(result.data);
+        } else {
+          showAlert('失敗', result.message);
+          setCloudImportChoice('skip');
+          setStep(0);
+        }
+      } else {
+        const result = await googleDrive.restoreFromDrive(token);
+        if (result.success) {
+          await reloadFromDatabase();
+        } else {
+          showAlert('失敗', result.message);
+          setCloudImportChoice('skip');
+          setStep(0);
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '匯入失敗';
+      showAlert('錯誤', message);
+      setCloudImportChoice('skip');
+      setStep(0);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleFinish = () => {
@@ -244,6 +313,38 @@ export default function OnboardingScreen() {
     }
   };
 
+  if (cloudImportChoice === 'pending') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.stepContainer}>
+            <Text style={styles.title}>{CLOUD_IMPORT.title}</Text>
+            <Text style={styles.subtitle}>{CLOUD_IMPORT.description}</Text>
+          </View>
+        </ScrollView>
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.nextBtn, styles.cloudImportPrimaryBtn]}
+            onPress={handleCloudImport}
+            disabled={isImporting}
+          >
+            <Text style={styles.nextBtnText}>{CLOUD_IMPORT.buttonImport}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.nextBtn, styles.cloudImportSecondaryBtn]}
+            onPress={() => {
+              setCloudImportChoice('skip');
+              setStep(0);
+            }}
+            disabled={isImporting}
+          >
+            <Text style={styles.cloudImportSecondaryBtnText}>{CLOUD_IMPORT.buttonSkip}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -416,6 +517,14 @@ const styles = StyleSheet.create({
   },
   viewConsentDetailBtnText: { fontSize: 15, color: '#007AFF', fontWeight: '500' },
   nextBtnDisabled: { opacity: 0.5 },
+  cloudImportPrimaryBtn: { flex: 1 },
+  cloudImportSecondaryBtn: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  cloudImportSecondaryBtnText: { color: '#007AFF', fontSize: 18, fontWeight: 'bold' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

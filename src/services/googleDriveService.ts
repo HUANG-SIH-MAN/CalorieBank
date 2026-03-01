@@ -26,6 +26,15 @@ export interface DriveSyncResult {
   message: string;
 }
 
+/** Web 備份資料結構（與 AsyncStorage 一致） */
+export interface WebBackupData {
+  userProfile: unknown;
+  foodLogs: unknown[];
+  weightLogs: unknown[];
+  waterLogs: unknown[];
+  exerciseLogs: unknown[];
+}
+
 /**
  * Handle Google Login and Token management
  */
@@ -50,6 +59,108 @@ export const googleLogin = async () => {
     return result.authentication?.accessToken;
   } else {
     throw new Error("Google 登入失敗");
+  }
+};
+
+const WEB_BACKUP_FILENAME = "caloriebank_web_bak.json";
+
+/**
+ * Upload web app data (JSON) to Google Drive (AppData folder)
+ * 供網頁版使用：備份 profile + 各 log 陣列為單一 JSON 檔
+ */
+export const backupToDriveWeb = async (
+  accessToken: string,
+  data: WebBackupData,
+): Promise<DriveSyncResult> => {
+  try {
+    const jsonString = JSON.stringify(data);
+
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name="${WEB_BACKUP_FILENAME}"`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const searchData = await searchResponse.json();
+    const existingFile = searchData.files && searchData.files[0];
+
+    const metadata = {
+      name: WEB_BACKUP_FILENAME,
+      parents: ["appDataFolder"],
+    };
+    const boundary = "foo_bar_baz";
+    const multipartBody =
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      JSON.stringify(metadata) +
+      `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      jsonString +
+      `\r\n` +
+      `--${boundary}--`;
+
+    const url = existingFile
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`
+      : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+    const method = existingFile ? "PATCH" : "POST";
+
+    const uploadResponse = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body: multipartBody,
+    });
+
+    if (uploadResponse.ok) {
+      return { success: true, message: "備份成功！" };
+    }
+    const err = await uploadResponse.json();
+    throw new Error(err.error?.message || "上傳失敗");
+  } catch (error: unknown) {
+    console.error("Backup Web Error:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "備份失敗",
+    };
+  }
+};
+
+/**
+ * Restore web app data (JSON) from Google Drive
+ * 供網頁版使用：下載 JSON 並回傳解析後的資料，由 caller 寫入 AsyncStorage 與 state
+ */
+export const restoreFromDriveWeb = async (
+  accessToken: string,
+): Promise<DriveSyncResult & { data?: WebBackupData }> => {
+  try {
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name="${WEB_BACKUP_FILENAME}"`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const searchData = await searchResponse.json();
+    const driveFile = searchData.files && searchData.files[0];
+
+    if (!driveFile) {
+      return { success: false, message: "雲端找不到備份檔案" };
+    }
+
+    const downloadResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${driveFile.id}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!downloadResponse.ok) throw new Error("下載備份失敗");
+
+    const jsonString = await downloadResponse.text();
+    const data = JSON.parse(jsonString) as WebBackupData;
+
+    return { success: true, message: "還原成功！", data };
+  } catch (error: unknown) {
+    console.error("Restore Web Error:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "還原失敗",
+    };
   }
 };
 
