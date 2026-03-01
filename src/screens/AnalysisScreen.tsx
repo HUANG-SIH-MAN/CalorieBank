@@ -239,10 +239,21 @@ export default function AnalysisScreen() {
     });
     const avgDailyDeficit =
       daysWithFoodIn30 > 0 ? totalDeficitFromRecordedDays / daysWithFoodIn30 : 0;
-    const projectedWeightLoss: string | null =
+    const projectedKgRaw: number | null =
       daysWithFoodIn30 === 0
         ? null
-        : ((avgDailyDeficit * DAYS_FOR_MONTHLY_STATS) / KCAL_PER_KG_WEIGHT_LOSS).toFixed(1);
+        : (avgDailyDeficit * DAYS_FOR_MONTHLY_STATS) / KCAL_PER_KG_WEIGHT_LOSS;
+    const isWeightGain = projectedKgRaw != null && projectedKgRaw < 0;
+    const projectedWeightLabel =
+      projectedKgRaw == null
+        ? null
+        : isWeightGain
+          ? '預計增重 (30天)'
+          : '預計減重 (30天)';
+    const projectedWeightValue: string | null =
+      projectedKgRaw == null
+        ? null
+        : Math.abs(projectedKgRaw).toFixed(1);
 
     const dates30ForBodyFat = generateDateData(DAYS_FOR_MONTHLY_STATS);
     const bodyFatLogs30 = weightLogs.filter(
@@ -264,7 +275,8 @@ export default function AnalysisScreen() {
     return {
       avgIntake7,
       avgBurn7,
-      projectedWeightLoss,
+      projectedWeightLabel,
+      projectedWeightValue,
       bodyFatChange30: bodyFatChange30 != null ? bodyFatChange30.toFixed(1) : null,
       bodyFatAvg30: bodyFatAvg30 != null ? bodyFatAvg30.toFixed(1) : null,
     };
@@ -284,9 +296,9 @@ export default function AnalysisScreen() {
         <LinearGradient colors={['#FFFFFF', '#F8F9FA']} style={styles.mainStatsCard}>
           <View style={styles.statsTopRow}>
             <View style={styles.mainScoreWrapper}>
-              <Text style={styles.mainScoreLabel}>預計減重 (30天)</Text>
+              <Text style={styles.mainScoreLabel}>{stats.projectedWeightLabel ?? '預計減重 (30天)'}</Text>
               <Text style={styles.mainScoreValue}>
-                {stats.projectedWeightLoss ?? '—'}<Text style={styles.mainScoreUnit}>{stats.projectedWeightLoss != null ? 'kg' : ''}</Text>
+                {stats.projectedWeightValue ?? '—'}<Text style={styles.mainScoreUnit}>{stats.projectedWeightValue != null ? 'kg' : ''}</Text>
               </Text>
             </View>
             <View style={styles.scoreDivider} />
