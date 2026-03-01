@@ -10,6 +10,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
+const DAYS_FOR_WEEKLY_STATS = 7;
+const DAYS_FOR_MONTHLY_STATS = 30;
+const KCAL_PER_KG_WEIGHT_LOSS = 7700;
+const DEFAULT_DAILY_CALORIE_GOAL = 1833;
+
 export default function AnalysisScreen() {
   const { foodLogs, exerciseLogs, weightLogs, userProfile } = useAppContext();
 
@@ -29,8 +34,8 @@ export default function AnalysisScreen() {
 
   // --- 1. Calorie Intake (7 Days) ---
   const calorieData = useMemo(() => {
-    const dates = generateDateData(7);
-    const goal = userProfile?.dailyCalorieGoal || 1833;
+    const dates = generateDateData(DAYS_FOR_WEEKLY_STATS);
+    const goal = userProfile?.dailyCalorieGoal ?? DEFAULT_DAILY_CALORIE_GOAL;
 
     return dates.map((date) => {
       const dayLogs = foodLogs.filter(log => log.date === date);
@@ -54,7 +59,7 @@ export default function AnalysisScreen() {
 
   // --- 2. Exercise Burn (7 Days) ---
   const exerciseData = useMemo(() => {
-    const dates = generateDateData(7);
+    const dates = generateDateData(DAYS_FOR_WEEKLY_STATS);
     return dates.map((date) => {
       const dayLogs = exerciseLogs.filter(log => log.date === date);
       const total = dayLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
@@ -163,7 +168,7 @@ export default function AnalysisScreen() {
 
   // --- 4. Average Macro (7 Days) ---
   const macroSummary = useMemo(() => {
-    const dates = generateDateData(7);
+    const dates = generateDateData(DAYS_FOR_WEEKLY_STATS);
     let p = 0, c = 0, f = 0;
 
     dates.forEach(date => {
@@ -183,27 +188,63 @@ export default function AnalysisScreen() {
     ];
   }, [foodLogs]);
 
-  // --- 5. Statistics ---
+  // --- 5. Statistics (only count days with records) ---
   const stats = useMemo(() => {
-    const dates30 = generateDateData(30);
-    const dates7 = generateDateData(7);
+    const dates30 = generateDateData(DAYS_FOR_MONTHLY_STATS);
+    const dates7 = generateDateData(DAYS_FOR_WEEKLY_STATS);
+    const goal = userProfile?.dailyCalorieGoal ?? DEFAULT_DAILY_CALORIE_GOAL;
 
-    let totalIntake30 = 0, totalBurn30 = 0, totalIntake7 = 0, totalBurn7 = 0;
-    const goal = userProfile?.dailyCalorieGoal || 1833;
-
-    dates30.forEach(date => {
-      totalIntake30 += foodLogs.filter(log => log.date === date).reduce((s, l) => s + l.calories, 0);
-      totalBurn30 += exerciseLogs.filter(log => log.date === date).reduce((s, l) => s + l.caloriesBurned, 0);
-    });
-
+    // avgIntake7: only days with at least one food log
+    let totalIntake7 = 0;
+    let daysWithIntake = 0;
     dates7.forEach(date => {
-      totalIntake7 += foodLogs.filter(log => log.date === date).reduce((s, l) => s + l.calories, 0);
-      totalBurn7 += exerciseLogs.filter(log => log.date === date).reduce((s, l) => s + l.caloriesBurned, 0);
+      const dayLogs = foodLogs.filter(log => log.date === date);
+      const dayIntake = dayLogs.reduce((s, l) => s + l.calories, 0);
+      if (dayLogs.length > 0) {
+        daysWithIntake += 1;
+        totalIntake7 += dayIntake;
+      }
     });
+    const avgIntake7: number | null =
+      daysWithIntake === 0 ? null : Math.round(totalIntake7 / daysWithIntake);
 
-    const totalDeficit30 = (goal * 30) - totalIntake30 + totalBurn30;
+    // avgBurn7: only "active days" (has food or weight log); no record = normal (0 burn that day)
+    let totalBurnOnActiveDays = 0;
+    let activeDaysCount = 0;
+    dates7.forEach(date => {
+      const hasFood = foodLogs.some(log => log.date === date);
+      const hasWeight = weightLogs.some(log => log.date === date);
+      if (hasFood || hasWeight) {
+        activeDaysCount += 1;
+        totalBurnOnActiveDays += exerciseLogs
+          .filter(log => log.date === date)
+          .reduce((s, l) => s + l.caloriesBurned, 0);
+      }
+    });
+    const avgBurn7: number | null =
+      activeDaysCount === 0 ? null : Math.round(totalBurnOnActiveDays / activeDaysCount);
 
-    const dates30ForBodyFat = generateDateData(30);
+    // projectedWeightLoss: only days with food record; avg daily deficit then project to 30 days
+    let totalDeficitFromRecordedDays = 0;
+    let daysWithFoodIn30 = 0;
+    dates30.forEach(date => {
+      const dayFoodLogs = foodLogs.filter(log => log.date === date);
+      if (dayFoodLogs.length === 0) return;
+      const dayIntake = dayFoodLogs.reduce((s, l) => s + l.calories, 0);
+      const dayBurn = exerciseLogs
+        .filter(log => log.date === date)
+        .reduce((s, l) => s + l.caloriesBurned, 0);
+      totalDeficitFromRecordedDays += goal - dayIntake + dayBurn;
+      daysWithFoodIn30 += 1;
+    });
+    const avgDailyDeficit =
+      daysWithFoodIn30 > 0 ? totalDeficitFromRecordedDays / daysWithFoodIn30 : 0;
+    const projectedWeightLoss: string | null =
+      daysWithFoodIn30 === 0
+        ? null
+        : ((avgDailyDeficit * DAYS_FOR_MONTHLY_STATS) / KCAL_PER_KG_WEIGHT_LOSS).toFixed(1);
+
+    const dates30ForBodyFat = generateDateData(DAYS_FOR_MONTHLY_STATS);
     const bodyFatLogs30 = weightLogs.filter(
       log => log.bodyFatPercent != null && dates30ForBodyFat.includes(log.date)
     );
@@ -221,9 +262,9 @@ export default function AnalysisScreen() {
         : null;
 
     return {
-      avgIntake7: Math.round(totalIntake7 / 7),
-      avgBurn7: Math.round(totalBurn7 / 7),
-      projectedWeightLoss: (totalDeficit30 / 7700).toFixed(1),
+      avgIntake7,
+      avgBurn7,
+      projectedWeightLoss,
       bodyFatChange30: bodyFatChange30 != null ? bodyFatChange30.toFixed(1) : null,
       bodyFatAvg30: bodyFatAvg30 != null ? bodyFatAvg30.toFixed(1) : null,
     };
@@ -244,7 +285,9 @@ export default function AnalysisScreen() {
           <View style={styles.statsTopRow}>
             <View style={styles.mainScoreWrapper}>
               <Text style={styles.mainScoreLabel}>預計減重 (30天)</Text>
-              <Text style={styles.mainScoreValue}>{stats.projectedWeightLoss}<Text style={styles.mainScoreUnit}>kg</Text></Text>
+              <Text style={styles.mainScoreValue}>
+                {stats.projectedWeightLoss ?? '—'}<Text style={styles.mainScoreUnit}>{stats.projectedWeightLoss != null ? 'kg' : ''}</Text>
+              </Text>
             </View>
             <View style={styles.scoreDivider} />
             <View style={styles.subStatsColumn}>
@@ -254,7 +297,9 @@ export default function AnalysisScreen() {
                 </View>
                 <View>
                   <Text style={styles.subStatLabel}>平均攝入</Text>
-                  <Text style={styles.subStatValue}>{stats.avgIntake7}<Text style={styles.subStatUnit}>kcal</Text></Text>
+                  <Text style={styles.subStatValue}>
+                    {stats.avgIntake7 ?? '—'}<Text style={styles.subStatUnit}>{stats.avgIntake7 != null ? 'kcal' : ''}</Text>
+                  </Text>
                 </View>
               </View>
               <View style={styles.subStatItem}>
@@ -263,7 +308,9 @@ export default function AnalysisScreen() {
                 </View>
                 <View>
                   <Text style={styles.subStatLabel}>平均運動</Text>
-                  <Text style={styles.subStatValue}>{stats.avgBurn7}<Text style={styles.subStatUnit}>kcal</Text></Text>
+                  <Text style={styles.subStatValue}>
+                    {stats.avgBurn7 ?? '—'}<Text style={styles.subStatUnit}>{stats.avgBurn7 != null ? 'kcal' : ''}</Text>
+                  </Text>
                 </View>
               </View>
               {stats.bodyFatAvg30 != null && (
@@ -315,7 +362,7 @@ export default function AnalysisScreen() {
               barWidth={24}
               spacing={14}
               noOfSections={3}
-              maxValue={Math.max(...calorieData.map(d => d.value), userProfile?.dailyCalorieGoal || 1833) * 1.2}
+              maxValue={Math.max(...calorieData.map(d => d.value), userProfile?.dailyCalorieGoal ?? DEFAULT_DAILY_CALORIE_GOAL) * 1.2}
               xAxisLabelTextStyle={{ fontSize: 9, color: '#999' }}
               yAxisTextStyle={{ fontSize: 9, color: '#999' }}
               yAxisLabelWidth={30}
