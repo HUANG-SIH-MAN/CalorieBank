@@ -30,6 +30,8 @@ export interface UserProfile {
   geminiModel?: string;
   customFoodTags?: string[];
   bodyFatPercent?: number; // optional, for display when no weight log has it
+  aiConsentAccepted?: boolean;
+  aiConsentAcceptedAt?: string; // ISO date string
 }
 
 export interface FoodLog {

@@ -5,10 +5,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Dimensions,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,12 +16,16 @@ import { useAppContext } from '../context/AppContext';
 import { UserProfile } from '../types';
 
 import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
+import { AI_CONSENT } from '../constants/aiConsent';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
+
+const TOTAL_STEPS = 5;
 
 export default function OnboardingScreen() {
   const { setUserProfile } = useAppContext();
-  const [step, setStep] = useState(1);
-  const totalSteps = 4;
+  const [step, setStep] = useState(0);
+  const [step4ConsentChecked, setStep4ConsentChecked] = useState(false);
+  const [showConsentDetailModal, setShowConsentDetailModal] = useState(false);
 
   // Form State
   const [gender, setGender] = useState<'MALE' | 'FEMALE'>('MALE');
@@ -59,6 +63,8 @@ export default function OnboardingScreen() {
       activityLevel: activityLevel as any,
       weightChangeSpeed: speed as any,
       dailyCalorieGoal,
+      aiConsentAccepted: true,
+      aiConsentAcceptedAt: new Date().toISOString(),
       ...(parsedBodyFat != null && !Number.isNaN(parsedBodyFat)
         ? { bodyFatPercent: parsedBodyFat }
         : {}),
@@ -68,6 +74,17 @@ export default function OnboardingScreen() {
 
   const renderStep = () => {
     switch (step) {
+      case 0:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.title}>{AI_CONSENT.step0Title}</Text>
+            {AI_CONSENT.step0Body.map((paragraph, index) => (
+              <Text key={index} style={styles.consentParagraph}>
+                {paragraph}
+              </Text>
+            ))}
+          </View>
+        );
       case 1:
         return (
           <View style={styles.stepContainer}>
@@ -186,7 +203,7 @@ export default function OnboardingScreen() {
             ))}
           </View>
         );
-      case 4:
+      case 4: {
         const goal = calculateGoal();
         return (
           <View style={styles.stepContainer}>
@@ -198,8 +215,32 @@ export default function OnboardingScreen() {
             <Text style={styles.summaryText}>
               根據你的資料，每天攝取 {goal} kcal 將能幫助你達成計畫。
             </Text>
+            <TouchableOpacity
+              style={styles.consentRow}
+              onPress={() => setStep4ConsentChecked((c) => !c)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={step4ConsentChecked ? 'checkbox' : 'checkbox-outline'}
+                size={24}
+                color={step4ConsentChecked ? '#007AFF' : '#999'}
+              />
+              <Text style={styles.consentCheckboxLabel}>
+                {AI_CONSENT.step4CheckboxLabel}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.viewConsentDetailBtn}
+              onPress={() => setShowConsentDetailModal(true)}
+            >
+              <Ionicons name="document-text-outline" size={18} color="#007AFF" />
+              <Text style={styles.viewConsentDetailBtnText}>
+                {AI_CONSENT.step4ViewDetailLabel}
+              </Text>
+            </TouchableOpacity>
           </View>
         );
+      }
     }
   };
 
@@ -211,7 +252,7 @@ export default function OnboardingScreen() {
     >
       <SafeAreaView style={styles.container}>
         <View style={styles.progressHeader}>
-          <View style={[styles.progressBar, { width: `${(step / totalSteps) * 100}%` }]} />
+          <View style={[styles.progressBar, { width: `${((step + 1) / TOTAL_STEPS) * 100}%` }]} />
         </View>
 
         <ScrollView
@@ -223,19 +264,72 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View style={styles.footer}>
-          {step > 1 && (
+          {step > 0 && (
             <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>
               <Text style={styles.backBtnText}>上一步</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            style={styles.nextBtn}
-            onPress={() => step < totalSteps ? setStep(step + 1) : handleFinish()}
-          >
-            <Text style={styles.nextBtnText}>{step === totalSteps ? '開始管理' : '下一步'}</Text>
-          </TouchableOpacity>
+          {step === 0 ? (
+            <TouchableOpacity
+              style={styles.nextBtn}
+              onPress={() => setStep(1)}
+            >
+              <Text style={styles.nextBtnText}>{AI_CONSENT.step0ButtonLabel}</Text>
+            </TouchableOpacity>
+          ) : step === TOTAL_STEPS - 1 ? (
+            <TouchableOpacity
+              style={[styles.nextBtn, !step4ConsentChecked && styles.nextBtnDisabled]}
+              onPress={() => step4ConsentChecked && handleFinish()}
+              disabled={!step4ConsentChecked}
+            >
+              <Text style={styles.nextBtnText}>開始管理</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.nextBtn}
+              onPress={() => setStep(step + 1)}
+            >
+              <Text style={styles.nextBtnText}>下一步</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={showConsentDetailModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConsentDetailModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowConsentDetailModal(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setShowConsentDetailModal(false)}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{AI_CONSENT.step0Title}</Text>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {AI_CONSENT.step0Body.map((paragraph, index) => (
+                <Text key={index} style={styles.modalParagraph}>
+                  {paragraph}
+                </Text>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={() => setShowConsentDetailModal(false)}
+            >
+              <Text style={styles.nextBtnText}>關閉</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -302,5 +396,41 @@ const styles = StyleSheet.create({
   },
   resultValue: { fontSize: 48, fontWeight: 'bold', color: '#007AFF' },
   resultLabel: { fontSize: 16, color: '#007AFF', marginTop: 5 },
-  summaryText: { textAlign: 'center', fontSize: 16, color: '#666', lineHeight: 24 }
+  summaryText: { textAlign: 'center', fontSize: 16, color: '#666', lineHeight: 24 },
+  consentParagraph: { fontSize: 16, color: '#666', lineHeight: 24, marginBottom: 20 },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingRight: 8,
+  },
+  consentCheckboxLabel: { fontSize: 15, color: '#1A1A1A', marginLeft: 12, flex: 1 },
+  viewConsentDetailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  viewConsentDetailBtnText: { fontSize: 15, color: '#007AFF', fontWeight: '500' },
+  nextBtnDisabled: { opacity: 0.5 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalCloseBtn: { position: 'absolute', top: 16, right: 16, zIndex: 1 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 16, color: '#1A1A1A', paddingRight: 32 },
+  modalScroll: { maxHeight: 280 },
+  modalParagraph: { fontSize: 15, color: '#666', lineHeight: 24, marginBottom: 16 },
+  modalConfirmBtn: { backgroundColor: '#007AFF', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
 });

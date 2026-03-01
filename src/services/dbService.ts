@@ -84,6 +84,16 @@ export const initDatabase = async () => {
   } catch (_e) {
     // Column already exists on new installs
   }
+  try {
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN aiConsentAccepted INTEGER;');
+  } catch (_e) {
+    // Column already exists on new installs
+  }
+  try {
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN aiConsentAcceptedAt TEXT;');
+  } catch (_e) {
+    // Column already exists on new installs
+  }
 
   return db;
 };
@@ -94,8 +104,9 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
     `INSERT OR REPLACE INTO user_profile (
       id, name, age, gender, height, weight, goalWeight, activityLevel, 
       weightChangeSpeed, dailyCalorieGoal, waterGoal, waterContainers, 
-      favoriteExerciseIds, customExercises, stepGoal, geminiModel, customFoodTags, bodyFatPercent
-    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      favoriteExerciseIds, customExercises, stepGoal, geminiModel, customFoodTags, bodyFatPercent,
+      aiConsentAccepted, aiConsentAcceptedAt
+    ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       profile.name, profile.age, profile.gender, profile.height, profile.weight, 
       profile.goalWeight, profile.activityLevel, profile.weightChangeSpeed || null, 
@@ -106,7 +117,9 @@ export const saveUserProfile = async (db: SQLite.SQLiteDatabase, profile: UserPr
       profile.stepGoal || null,
       profile.geminiModel || null,
       JSON.stringify(profile.customFoodTags || []),
-      profile.bodyFatPercent ?? null
+      profile.bodyFatPercent ?? null,
+      profile.aiConsentAccepted === true ? 1 : 0,
+      profile.aiConsentAcceptedAt ?? null
     ]
   );
 };
@@ -118,7 +131,9 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     dailyCalorieGoal: number, waterGoal: number, waterContainers: string, 
     favoriteExerciseIds: string, customExercises: string, stepGoal: number, geminiModel: string,
     customFoodTags?: string,
-    bodyFatPercent?: number
+    bodyFatPercent?: number,
+    aiConsentAccepted?: number | null,
+    aiConsentAcceptedAt?: string | null
   }>('SELECT * FROM user_profile WHERE id = 1');
 
   if (!row) return null;
@@ -144,7 +159,9 @@ export const getUserProfile = async (db: SQLite.SQLiteDatabase): Promise<UserPro
     stepGoal: row.stepGoal,
     geminiModel: row.geminiModel,
     ...(customFoodTags !== undefined ? { customFoodTags } : {}),
-    bodyFatPercent: row.bodyFatPercent ?? undefined
+    bodyFatPercent: row.bodyFatPercent ?? undefined,
+    ...(row.aiConsentAccepted === 1 ? { aiConsentAccepted: true as const } : {}),
+    ...(row.aiConsentAcceptedAt ? { aiConsentAcceptedAt: row.aiConsentAcceptedAt } : {}),
   };
 };
 
