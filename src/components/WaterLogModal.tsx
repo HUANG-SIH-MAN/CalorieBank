@@ -29,7 +29,7 @@ export default function WaterLogModal({ visible, onClose, onSave }: WaterLogModa
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.headerBtn}>

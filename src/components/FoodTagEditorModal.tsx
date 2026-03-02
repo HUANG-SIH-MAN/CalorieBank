@@ -64,7 +64,7 @@ export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEd
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false}>
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.headerBtn}>

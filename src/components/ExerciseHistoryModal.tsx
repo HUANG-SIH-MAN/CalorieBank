@@ -98,7 +98,7 @@ export default function ExerciseHistoryModal({
   const maxCalories = Math.max(...daysData.map(d => d.calories), 100);
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>

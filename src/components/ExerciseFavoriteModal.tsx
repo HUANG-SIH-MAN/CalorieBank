@@ -142,7 +142,7 @@ export default function ExerciseFavoriteModal({ visible, onClose }: ExerciseFavo
 
   if (isAddingMode) {
     return (
-      <Modal visible={visible} animationType="fade" transparent>
+      <Modal visible={visible} animationType="fade" transparent onRequestClose={() => setIsAddingMode(false)}>
         <View style={styles.modalOverlay}>
           <SafeAreaView style={styles.formContent} edges={['bottom']}>
             <View style={styles.header}>
@@ -181,7 +181,7 @@ export default function ExerciseFavoriteModal({ visible, onClose }: ExerciseFavo
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <SafeAreaView style={styles.modalContent} edges={['bottom']}>
           <View style={styles.header}>

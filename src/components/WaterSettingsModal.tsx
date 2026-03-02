@@ -44,7 +44,7 @@ export default function WaterSettingsModal({ visible, onClose }: WaterSettingsMo
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.overlay} edges={['bottom']}>
         <View style={styles.container}>
           <View style={styles.header}>

@@ -322,7 +322,7 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
           <View style={styles.header}>

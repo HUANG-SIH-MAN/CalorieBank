@@ -33,7 +33,7 @@ interface DatePickerModalProps {
 
 export default function DatePickerModal({ visible, onClose, onSelectDate, selectedDate }: DatePickerModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>

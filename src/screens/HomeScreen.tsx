@@ -14,6 +14,10 @@ import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import { calculateMacroGoals } from '../utils/fitness';
 import { MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 
+const DEFAULT_WATER_GLASS_ML = 250;
+const DEFAULT_WATER_BOTTLE_ML = 500;
+const DEFAULT_WATER_JUG_ML = 1000;
+
 export default function HomeScreen() {
   const { userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, addWeightLog, addWaterLog } = useAppContext();
   // ... existing states ...
@@ -59,7 +63,10 @@ export default function HomeScreen() {
     null;
 
   const currentWaterLogs = waterLogs.filter(log => log.date === selectedDate);
-  const todayWater = currentWaterLogs.reduce((sum, log) => sum + log.amount, 0);
+  const todayWater = currentWaterLogs.reduce(
+    (sum, log) => sum + (Number(log.amount) || 0),
+    0
+  );
 
   const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
   const macroGoals = calculateMacroGoals(
@@ -81,9 +88,16 @@ export default function HomeScreen() {
   // Exercise bonus water: every 30 min of exercise = +200ml
   const exerciseBonusWater = Math.round((todayExerciseDuration / 30) * 200);
   const waterGoal = baseWaterGoal + exerciseBonusWater;
-  const waterProgress = Math.min(todayWater / waterGoal, 1);
+  const safeTodayWater = Number.isFinite(todayWater) ? todayWater : 0;
+  const waterProgress =
+    waterGoal > 0 ? Math.min(safeTodayWater / waterGoal, 1) : 0;
 
-  const containers = userProfile?.waterContainers || { small: 250, medium: 500, large: 1000 };
+  const rawContainers = userProfile?.waterContainers;
+  const containers = {
+    small: rawContainers?.small ?? DEFAULT_WATER_GLASS_ML,
+    medium: rawContainers?.medium ?? DEFAULT_WATER_BOTTLE_ML,
+    large: rawContainers?.large ?? DEFAULT_WATER_JUG_ML,
+  };
 
   const remaining = calorieGoal - todayCalories + todayExerciseCalories;
 
@@ -350,7 +364,7 @@ export default function HomeScreen() {
                 </View>
                 <View>
                   <Text style={styles.infoTitle}>飲水紀錄</Text>
-                  <Text style={styles.infoSub}>{todayWater} / {waterGoal} ml</Text>
+                  <Text style={styles.infoSub}>{safeTodayWater} / {waterGoal} ml</Text>
                   {exerciseBonusWater > 0 && (
                     <Text style={styles.exerciseBonusNote}>
                       🏃 運動 {todayExerciseDuration} 分鐘，加碼 +{exerciseBonusWater} ml
@@ -370,7 +384,7 @@ export default function HomeScreen() {
 
             {/* Progress Bar + Status */}
             {(() => {
-              const remaining = Math.max(0, waterGoal - todayWater);
+              const remaining = Math.max(0, waterGoal - safeTodayWater);
               return (
                 <View>
                   <View style={styles.progressBarBg}>
@@ -384,7 +398,7 @@ export default function HomeScreen() {
                         還差 <Text style={styles.waterRemainingBold}>{remaining} ml</Text> 達標
                       </Text>
                     )}
-                    <Text style={styles.waterPercentText}>{Math.round(waterProgress * 100)}%</Text>
+                    <Text style={styles.waterPercentText}>{Number.isFinite(waterProgress) ? Math.round(waterProgress * 100) : 0}%</Text>
                   </View>
                 </View>
               );

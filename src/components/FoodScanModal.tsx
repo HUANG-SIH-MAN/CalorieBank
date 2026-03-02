@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -256,7 +257,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   // - 樣式：photoSmall、photoWrapperWithRetake 見 StyleSheet
 
   const renderIdle = () => (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       {/* Photo Area：與 renderResult 完全同一結構（無 photoContainer），見 337–345 行 */}
       {imageUri ? (
         <View style={styles.photoWrapperWithRetake}>
@@ -593,26 +594,42 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     </ScrollView>
   );
 
+  const handleRequestClose = () => {
+    if (showConfig) {
+      setShowConfig(false);
+    } else if (showTagEditor) {
+      setShowTagEditor(false);
+    } else {
+      handleClose();
+    }
+  };
+
   return (
     <>
-      <Modal visible={visible} animationType="slide" statusBarTranslucent>
-        <SafeAreaView style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
-              <Ionicons name="close" size={28} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {stage === 'manual' ? '手動輸入' : 'AI 辨識食物'}
-            </Text>
-            <View style={styles.headerBtn} />
-          </View>
+      <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleRequestClose}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <SafeAreaView style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>
+                {stage === 'manual' ? '手動輸入' : 'AI 辨識食物'}
+              </Text>
+              <View style={styles.headerBtn} />
+            </View>
 
-          {stage === 'idle' && renderIdle()}
-          {stage === 'analyzing' && renderAnalyzing()}
-          {stage === 'result' && renderResult()}
-          {stage === 'manual' && renderManual()}
-        </SafeAreaView>
+            {stage === 'idle' && renderIdle()}
+            {stage === 'analyzing' && renderAnalyzing()}
+            {stage === 'result' && renderResult()}
+            {stage === 'manual' && renderManual()}
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <GeminiConfigModal

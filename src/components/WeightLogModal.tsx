@@ -68,8 +68,16 @@ export default function WeightLogModal({
     }
   };
 
+  const handleRequestClose = () => {
+    if (datePickerVisible) {
+      setDatePickerVisible(false);
+    } else {
+      onClose();
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleRequestClose}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
