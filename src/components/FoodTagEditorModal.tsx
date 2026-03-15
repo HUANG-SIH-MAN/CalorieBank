@@ -21,14 +21,20 @@ interface FoodTagEditorModalProps {
   tags: string[];
 }
 
+const DEFAULT_TAGS = ['大碗', '小份', '半份', '加蛋', '少油'];
+
 export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEditorModalProps) {
   const { userProfile, setUserProfile } = useAppContext();
   const [localTags, setLocalTags] = useState<string[]>(tags);
   const [newTag, setNewTag] = useState('');
+  const prevVisibleRef = useRef(false);
 
+  // 僅在 modal「剛打開」時從 userProfile 同步到 localTags，避免編輯/拖曳時被覆寫導致新標籤消失
   useEffect(() => {
-    if (visible) {
-      setLocalTags(userProfile?.customFoodTags || ['大碗', '小份', '半份', '加蛋', '少油']);
+    const justOpened = visible && !prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (justOpened) {
+      setLocalTags(userProfile?.customFoodTags ?? DEFAULT_TAGS);
     }
   }, [visible, userProfile]);
 
@@ -44,7 +50,7 @@ export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEd
   };
 
   const handleRemove = (tag: string) => {
-    setLocalTags(localTags.filter(t => t !== tag));
+    setLocalTags(prev => prev.filter(t => t !== tag));
   };
 
   const handleSave = () => {
@@ -57,10 +63,12 @@ export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEd
   };
 
   const swapTags = (index1: number, index2: number) => {
-    if (index2 < 0 || index2 >= localTags.length) return;
-    const newTags = [...localTags];
-    [newTags[index1], newTags[index2]] = [newTags[index2], newTags[index1]];
-    setLocalTags(newTags);
+    setLocalTags(prev => {
+      if (index2 < 0 || index2 >= prev.length) return prev;
+      const newTags = [...prev];
+      [newTags[index1], newTags[index2]] = [newTags[index2], newTags[index1]];
+      return newTags;
+    });
   };
 
   return (
@@ -109,35 +117,42 @@ export default function FoodTagEditorModal({ visible, onClose, tags }: FoodTagEd
   );
 }
 
+const ROW_HEIGHT = 70; // 需與 styles.tagItem.height 一致
+const SWAP_THRESHOLD_RATIO = 0.8;
+
 function DraggableRow({ tag, index, onRemove, onSwap, totalItems }: any) {
   const [isDragging, setIsDragging] = useState(false);
   const rowTranslateY = useRef(new Animated.Value(0)).current;
-  const rowHeight = 70; // This should match styles.tagItem.height
+  const lastSwappedTargetRef = useRef<number | null>(null);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         setIsDragging(true);
+        lastSwappedTargetRef.current = null;
       },
       onPanResponderMove: (_, gestureState) => {
         rowTranslateY.setValue(gestureState.dy);
 
-        // Threshold for swapping
         const moveDist = gestureState.dy;
-        if (Math.abs(moveDist) > rowHeight * 0.8) {
+        const threshold = ROW_HEIGHT * SWAP_THRESHOLD_RATIO;
+        if (Math.abs(moveDist) > threshold) {
           const swapDir = moveDist > 0 ? 1 : -1;
           const targetIndex = index + swapDir;
-          if (targetIndex >= 0 && targetIndex < totalItems) {
+          if (
+            targetIndex >= 0 &&
+            targetIndex < totalItems &&
+            targetIndex !== lastSwappedTargetRef.current
+          ) {
+            lastSwappedTargetRef.current = targetIndex;
             onSwap(index, targetIndex);
-            // After swap, we should theoretically reset the position 
-            // but since the component re-renders with the new index, 
-            // it can be tricky without a controlled animated list.
           }
         }
       },
       onPanResponderRelease: () => {
         setIsDragging(false);
+        lastSwappedTargetRef.current = null;
         Animated.spring(rowTranslateY, {
           toValue: 0,
           useNativeDriver: true,
@@ -145,6 +160,7 @@ function DraggableRow({ tag, index, onRemove, onSwap, totalItems }: any) {
       },
       onPanResponderTerminate: () => {
         setIsDragging(false);
+        lastSwappedTargetRef.current = null;
         rowTranslateY.setValue(0);
       },
     })
@@ -224,7 +240,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F8F8F8',
-    height: 70,
+    height: ROW_HEIGHT,
     backgroundColor: '#FFF',
     zIndex: 1,
   },
