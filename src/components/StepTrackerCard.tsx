@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { Pedometer } from 'expo-sensors';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../context/AppContext';
+import { getTodayDateStringLocal, parseDateOnlyLocal } from '../utils/dateOnlyLocal';
 
 interface StepTrackerCardProps {
   date: string; // YYYY-MM-DD
@@ -30,10 +31,11 @@ export default function StepTrackerCard({ date }: StepTrackerCardProps) {
     };
 
     const fetchStepsForDate = async () => {
-      const start = new Date(date);
+      const day = parseDateOnlyLocal(date);
+      const start = new Date(day);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(date);
+      const end = new Date(day);
       end.setHours(23, 59, 59, 999);
 
       try {
@@ -49,7 +51,7 @@ export default function StepTrackerCard({ date }: StepTrackerCardProps) {
     checkAvailability();
 
     // If it's today, we should also watch for new steps
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateStringLocal();
     if (date === today) {
       subscription = Pedometer.watchStepCount(result => {
         // Pedometer.watchStepCount returns steps since subscription started

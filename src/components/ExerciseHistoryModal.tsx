@@ -14,6 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { BarChart } from 'react-native-chart-kit';
 import Constants from 'expo-constants';
 import { ExerciseLog } from '../types';
+import {
+  formatDateOnlyLocal,
+  getTodayDateStringLocal,
+  parseDateOnlyLocal,
+} from '../utils/dateOnlyLocal';
 
 interface ExerciseHistoryModalProps {
   visible: boolean;
@@ -37,9 +42,7 @@ export default function ExerciseHistoryModal({
     return acc;
   }, {});
 
-  const sortedDates = Object.keys(dailyTotals).sort((a, b) =>
-    new Date(b).getTime() - new Date(a).getTime()
-  );
+  const sortedDates = Object.keys(dailyTotals).sort((a, b) => b.localeCompare(a));
 
   const screenWidth = Dimensions.get('window').width;
   // chart width = screen - scrollPadding(20*2) - cardPadding(16*2) - extraSafety(10)
@@ -54,7 +57,7 @@ export default function ExerciseHistoryModal({
     for (let i = daysToShow - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(now.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateOnlyLocal(d);
       daysData.push({
         date: dateStr,
         calories: dailyTotals[dateStr]?.calories ?? 0,
@@ -88,11 +91,11 @@ export default function ExerciseHistoryModal({
   const chartData = { labels, datasets };
 
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr);
+    const d = parseDateOnlyLocal(dateStr);
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayDateStringLocal();
 
   // Calculate max value for chart (with some padding above)
   const maxCalories = Math.max(...daysData.map(d => d.calories), 100);

@@ -6,6 +6,7 @@ import * as SQLite from 'expo-sqlite';
 import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog, SavedMeal } from '../types';
 import type { WebBackupData } from '../services/googleDriveService';
 import * as dbService from '../services/dbService';
+import { getTodayDateStringLocal } from '../utils/dateOnlyLocal';
 
 interface AppContextType {
   userProfile: UserProfile | null;
@@ -31,6 +32,9 @@ interface AppContextType {
   reloadFromDatabase: () => Promise<void>;
   applyRestoredData: (data: WebBackupData) => Promise<void>;
   isLoading: boolean;
+  /** Shared YYYY-MM-DD for Home + Log tabs (session only; cold start = today, local TZ). */
+  selectedCalendarDate: string;
+  setSelectedCalendarDate: (dateOnly: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -53,6 +57,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() =>
+    getTodayDateStringLocal()
+  );
 
   const dbRef = useRef<SQLite.SQLiteDatabase | null>(null);
 
@@ -352,6 +359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setWeightLogs([]);
       setWaterLogs([]);
       setExerciseLogs([]);
+      setSelectedCalendarDate(getTodayDateStringLocal());
     } catch (error) {
       console.error('Failed to reset app data', error);
       throw error;
@@ -416,7 +424,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reloadFromDatabase,
     applyRestoredData,
     isLoading,
-  }), [userProfile, foodLogs, savedMeals, weightLogs, waterLogs, exerciseLogs, isLoading]);
+    selectedCalendarDate,
+    setSelectedCalendarDate,
+  }), [
+    userProfile,
+    foodLogs,
+    savedMeals,
+    weightLogs,
+    waterLogs,
+    exerciseLogs,
+    isLoading,
+    selectedCalendarDate,
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

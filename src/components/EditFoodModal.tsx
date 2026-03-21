@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FoodLog } from '../types';
 import { MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
+import { getTodayDateStringLocal } from '../utils/dateOnlyLocal';
 import DatePickerModal from './DatePickerModal';
 
 const NUTRITION_DECIMAL_FACTOR = 10;
@@ -201,7 +202,7 @@ export default function EditFoodModal({ visible, log, onClose, onSave }: EditFoo
             setDate(selectedDate);
             setDatePickerVisible(false);
           }}
-          selectedDate={date || new Date().toISOString().split('T')[0]}
+          selectedDate={date || getTodayDateStringLocal()}
         />
       </SafeAreaView>
     </Modal>

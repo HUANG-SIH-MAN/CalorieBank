@@ -8,6 +8,7 @@ import { useAppContext } from '../context/AppContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { resolveWeightChangeDisplay } from '../utils/weightChangeInWindow';
+import { formatDateOnlyLocal } from '../utils/dateOnlyLocal';
 
 const { width } = Dimensions.get('window');
 
@@ -25,7 +26,7 @@ export default function AnalysisScreen() {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
-      data.push(d.toISOString().split('T')[0]);
+      data.push(formatDateOnlyLocal(d));
     }
     return data;
   };

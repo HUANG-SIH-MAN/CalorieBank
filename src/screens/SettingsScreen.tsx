@@ -19,6 +19,7 @@ import { ACTIVITY_LEVELS, WEIGHT_SPEEDS } from '../constants/fitness';
 import { ENABLE_GOOGLE_DRIVE_SYNC } from '../constants/features';
 import { RESTORE_CONFIRM } from '../constants/onboarding';
 import { calculateDailyCalorieGoal } from '../utils/fitness';
+import { getTodayDateStringLocal } from '../utils/dateOnlyLocal';
 import { UserProfile } from '../types';
 import * as googleDrive from '../services/googleDriveService';
 import { validateGeminiKey } from '../services/geminiService';
@@ -551,7 +552,7 @@ export default function SettingsScreen() {
       <SavedMealsModal
         visible={savedMealsModalVisible}
         onClose={() => setSavedMealsModalVisible(false)}
-        targetDate={new Date().toISOString().split('T')[0]}
+        targetDate={getTodayDateStringLocal()}
       />
     </SafeAreaView>
   );

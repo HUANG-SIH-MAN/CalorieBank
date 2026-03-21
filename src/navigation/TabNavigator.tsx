@@ -11,9 +11,25 @@ import SettingsScreen from '../screens/SettingsScreen';
 const Tab = createBottomTabNavigator();
 
 const TAB_BAR_BASE_PADDING_BOTTOM = 8;
+const TAB_BAR_PADDING_TOP = 10;
+/** When the OS reports 0 bottom inset (common on Android 15+ / edge-to-edge), tab bar still sits under system nav — reserve at least this (≈ 3-button bar). */
+const ANDROID_MIN_BOTTOM_INSET_WHEN_UNREPORTED = 48;
+/** Extra gap above system navigation (~0.2cm on typical phone density; was ~1cm). */
+const TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM = 8;
+const TAB_BAR_HEIGHT_ANDROID = 100;
+const TAB_BAR_HEIGHT_IOS = 95;
 
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
+
+  const rawBottomInset = insets.bottom;
+  const baseBottomInset =
+    Platform.OS === 'android'
+      ? Math.max(rawBottomInset, ANDROID_MIN_BOTTOM_INSET_WHEN_UNREPORTED)
+      : rawBottomInset;
+  const bottomInset = baseBottomInset + TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM;
+  const extraTabBarHeightForInset =
+    Math.max(0, baseBottomInset - rawBottomInset) + TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM;
 
   return (
     <Tab.Navigator
@@ -45,9 +61,11 @@ export default function TabNavigator() {
           paddingVertical: 4,
         },
         tabBarStyle: {
-          height: Platform.OS === 'android' ? 100 : 95,
-          paddingBottom: TAB_BAR_BASE_PADDING_BOTTOM + insets.bottom,
-          paddingTop: 10,
+          height:
+            (Platform.OS === 'android' ? TAB_BAR_HEIGHT_ANDROID : TAB_BAR_HEIGHT_IOS) +
+            extraTabBarHeightForInset,
+          paddingBottom: TAB_BAR_BASE_PADDING_BOTTOM + bottomInset,
+          paddingTop: TAB_BAR_PADDING_TOP,
           backgroundColor: '#FFFFFF',
           borderTopWidth: 0.5,
           borderTopColor: '#E5E5EA',

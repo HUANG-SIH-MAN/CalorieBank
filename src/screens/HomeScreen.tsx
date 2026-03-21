@@ -13,13 +13,28 @@ import WaterSettingsModal from '../components/WaterSettingsModal';
 import ExerciseHistoryModal from '../components/ExerciseHistoryModal';
 import { calculateMacroGoals } from '../utils/fitness';
 import { MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
+import {
+  addCalendarDays,
+  getTodayDateStringLocal,
+  parseDateOnlyLocal,
+} from '../utils/dateOnlyLocal';
 
 const DEFAULT_WATER_GLASS_ML = 250;
 const DEFAULT_WATER_BOTTLE_ML = 500;
 const DEFAULT_WATER_JUG_ML = 1000;
 
 export default function HomeScreen() {
-  const { userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, addWeightLog, addWaterLog } = useAppContext();
+  const {
+    userProfile,
+    foodLogs,
+    weightLogs,
+    waterLogs,
+    exerciseLogs,
+    addWeightLog,
+    addWaterLog,
+    selectedCalendarDate,
+    setSelectedCalendarDate,
+  } = useAppContext();
   // ... existing states ...
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightHistoryVisible, setWeightHistoryVisible] = useState(false);
@@ -27,23 +42,20 @@ export default function HomeScreen() {
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [waterSettingsVisible, setWaterSettingsVisible] = useState(false);
   const [exerciseHistoryVisible, setExerciseHistoryVisible] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const selectedDate = selectedCalendarDate;
 
   const changeDate = (days: number) => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedCalendarDate(addCalendarDays(selectedCalendarDate, days));
   };
 
   const formatDateDisplay = (dateStr: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateStringLocal();
     if (dateStr === today) return '今天';
 
-    const d = new Date(dateStr);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (dateStr === yesterday.toISOString().split('T')[0]) return '昨天';
+    const yesterdayStr = addCalendarDays(today, -1);
+    if (dateStr === yesterdayStr) return '昨天';
 
+    const d = parseDateOnlyLocal(dateStr);
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
@@ -429,7 +441,7 @@ export default function HomeScreen() {
       <DatePickerModal
         visible={datePickerVisible}
         onClose={() => setDatePickerVisible(false)}
-        onSelectDate={setSelectedDate}
+        onSelectDate={setSelectedCalendarDate}
         selectedDate={selectedDate}
       />
 

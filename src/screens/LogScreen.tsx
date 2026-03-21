@@ -14,6 +14,11 @@ import SavedMealsModal from '../components/SavedMealsModal';
 import FoodLogActionSheet from '../components/FoodLogActionSheet';
 import MiniMacroBar from '../components/MiniMacroBar';
 import { calculateMacroGoals } from '../utils/fitness';
+import {
+  addCalendarDays,
+  getTodayDateStringLocal,
+  parseDateOnlyLocal,
+} from '../utils/dateOnlyLocal';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 
 type TabType = 'DIET' | 'EXERCISE';
@@ -33,9 +38,11 @@ export default function LogScreen() {
     updateFoodLog,
     deleteFoodLog,
     addSavedMeal,
+    selectedCalendarDate,
+    setSelectedCalendarDate,
   } = useAppContext();
   const [activeTab, setActiveTab] = useState<TabType>('DIET');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const selectedDate = selectedCalendarDate;
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [favoriteModalVisible, setFavoriteModalVisible] = useState(false);
   const [foodScanModalVisible, setFoodScanModalVisible] = useState(false);
@@ -43,7 +50,7 @@ export default function LogScreen() {
   const [savedMealsModalVisible, setSavedMealsModalVisible] = useState(false);
   const [copyDatePickerVisible, setCopyDatePickerVisible] = useState(false);
   const [logPendingCopy, setLogPendingCopy] = useState<FoodLog | null>(null);
-  const [copyPickerDate, setCopyPickerDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [copyPickerDate, setCopyPickerDate] = useState(() => getTodayDateStringLocal());
   const [foodMenuLog, setFoodMenuLog] = useState<FoodLog | null>(null);
 
   useFocusEffect(
@@ -76,15 +83,13 @@ export default function LogScreen() {
   const [duration, setDuration] = useState('30');
 
   const changeDate = (days: number) => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedCalendarDate(addCalendarDays(selectedCalendarDate, days));
   };
 
   const formatDateDisplay = (dateStr: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateStringLocal();
     if (dateStr === today) return '今天';
-    const d = new Date(dateStr);
+    const d = parseDateOnlyLocal(dateStr);
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
@@ -135,7 +140,7 @@ export default function LogScreen() {
   };
 
   const handleFoodMenuCopyToToday = (log: FoodLog) => {
-    const todayIso = new Date().toISOString().split('T')[0];
+    const todayIso = getTodayDateStringLocal();
     addFoodLog({
       name: log.name,
       calories: log.calories,
@@ -365,7 +370,7 @@ export default function LogScreen() {
       <DatePickerModal
         visible={datePickerVisible}
         onClose={() => setDatePickerVisible(false)}
-        onSelectDate={setSelectedDate}
+        onSelectDate={setSelectedCalendarDate}
         selectedDate={selectedDate}
       />
 
