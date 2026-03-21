@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -18,7 +18,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as SecureStore from 'expo-secure-store';
-import { analyzeFoodImage, FoodAnalysisResult } from '../services/geminiService';
+import { analyzeFoodImage, analyzeFoodText, FoodAnalysisResult } from '../services/geminiService';
+import { MIN_FOOD_TEXT_DESCRIPTION_LENGTH } from '../constants/foodText';
 import { useAppContext } from '../context/AppContext';
 import { calculateMacroGoals } from '../utils/fitness';
 import { getMealTypeByTime, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
@@ -43,12 +44,15 @@ interface FoodScanModalProps {
   date: string;
 }
 
-type Stage = 'idle' | 'analyzing' | 'result' | 'manual';
+type Stage = 'idle' | 'text' | 'analyzing' | 'result' | 'manual';
+type AnalysisSource = 'image' | 'text';
 
 export default function FoodScanModal({ visible, onClose, onConfirm, date }: FoodScanModalProps) {
   const { userProfile } = useAppContext();
   const [stage, setStage] = useState<Stage>('idle');
   const [showConfig, setShowConfig] = useState(false);
+  const resumeAfterConfigRef = useRef<AnalysisSource | null>(null);
+  const [lastAnalysisSource, setLastAnalysisSource] = useState<AnalysisSource | null>(null);
 
   const calorieGoal = userProfile?.dailyCalorieGoal || 1833;
   const macroGoals = calculateMacroGoals(
@@ -78,6 +82,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const [manualProtein, setManualProtein] = useState('');
   const [manualCarbs, setManualCarbs] = useState('');
   const [manualFat, setManualFat] = useState('');
+  const [textDescription, setTextDescription] = useState('');
 
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>(getMealTypeByTime());
   const [showTagEditor, setShowTagEditor] = useState(false);
@@ -96,6 +101,8 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setManualProtein('');
     setManualCarbs('');
     setManualFat('');
+    setTextDescription('');
+    setLastAnalysisSource(null);
     setSelectedMealType(getMealTypeByTime());
     setPortionMultiplier('1');
   };
@@ -159,12 +166,14 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     }
 
     if (!apiKey) {
+      resumeAfterConfigRef.current = 'image';
       setShowConfig(true);
       return;
     }
 
     const modelName = userProfile?.geminiModel || 'gemini-1.5-flash';
 
+    setLastAnalysisSource('image');
     setStage('analyzing');
     setErrorMsg('');
 
@@ -184,19 +193,71 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     }
   };
 
+  const buildTextDescriptionForApi = () => {
+    const base = textDescription.trim();
+    const extra = hints.trim();
+    return extra ? `${base}\n補充說明：${extra}` : base;
+  };
+
+  const doAnalyzeText = async () => {
+    const merged = buildTextDescriptionForApi();
+    if (merged.length < MIN_FOOD_TEXT_DESCRIPTION_LENGTH) {
+      Alert.alert(
+        '描述太短',
+        `請至少輸入 ${MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 個字，並包含食物與份量或種類（可含店名）。`,
+      );
+      return;
+    }
+
+    let apiKey = '';
+    if (Platform.OS === 'web') {
+      apiKey = (global as any).__geminiKey || '';
+    } else {
+      apiKey = await SecureStore.getItemAsync(SECURE_KEY) || '';
+    }
+
+    if (!apiKey) {
+      resumeAfterConfigRef.current = 'text';
+      setShowConfig(true);
+      return;
+    }
+
+    const modelName = userProfile?.geminiModel || 'gemini-1.5-flash';
+
+    setLastAnalysisSource('text');
+    setStage('analyzing');
+    setErrorMsg('');
+
+    try {
+      const res = await analyzeFoodText(merged, apiKey, modelName);
+      setResult(res);
+      setEditName(res.name);
+      setEditCalories(res.calories.toString());
+      setEditProtein(res.protein.toString());
+      setEditCarbs(res.carbs.toString());
+      setEditFat(res.fat.toString());
+      setStage('result');
+    } catch (e: any) {
+      setErrorMsg(e.message || '分析失敗');
+      setRetryCount(c => c + 1);
+      setStage('text');
+    }
+  };
+
   const handleRetry = () => {
+    const runAgain = lastAnalysisSource === 'text' ? doAnalyzeText : doAnalyze;
     if (retryCount >= 3) {
       Alert.alert(
         '辨識多次失敗',
         '建議補充關鍵字後重試，或切換為手動輸入',
         [
           { text: '手動輸入', onPress: () => setStage('manual') },
-          { text: '繼續重試', style: 'cancel', onPress: doAnalyze },
+          { text: '繼續重試', style: 'cancel', onPress: runAgain },
         ]
       );
       return;
     }
-    doAnalyze();
+    runAgain();
   };
 
   const handleConfirm = () => {
@@ -342,9 +403,66 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         </TouchableOpacity>
       )}
 
+      <TouchableOpacity
+        style={styles.manualBtn}
+        onPress={() => {
+          setImageUri(null);
+          setImageBase64(null);
+          setHints('');
+          setStage('text');
+        }}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#999" />
+        <Text style={styles.manualBtnText}>改用文字描述（AI）</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.manualBtn} onPress={() => setStage('manual')}>
         <Ionicons name="create-outline" size={18} color="#999" />
         <Text style={styles.manualBtnText}>手動輸入</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  const renderText = () => (
+    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View style={styles.textIntroCard}>
+        <MaterialCommunityIcons name="text-box-outline" size={36} color="#4CAF50" />
+        <Text style={styles.textIntroTitle}>用文字描述餐點</Text>
+        <Text style={styles.textIntroDesc}>
+          說明食物名稱、份量、店名或口味（至少 {MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 個字），AI 會估算熱量與營養素。
+        </Text>
+      </View>
+
+      {errorMsg ? (
+        <View style={styles.errorBox}>
+          <Ionicons name="alert-circle" size={18} color="#F44336" />
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      ) : null}
+
+      <TextInput
+        style={styles.textDescriptionInput}
+        placeholder="例如：連鎖店照燒雞腿便當，飯吃一半、有配菜玉米"
+        placeholderTextColor="#BBB"
+        value={textDescription}
+        onChangeText={setTextDescription}
+        multiline
+        textAlignVertical="top"
+      />
+
+      <TouchableOpacity style={styles.analyzeBtn} onPress={doAnalyzeText}>
+        <MaterialCommunityIcons name="robot" size={22} color="#FFF" />
+        <Text style={styles.analyzeBtnText}>AI 分析文字</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.manualBtn} onPress={() => setStage('manual')}>
+        <Ionicons name="create-outline" size={18} color="#999" />
+        <Text style={styles.manualBtnText}>改為手動輸入</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.manualBtn} onPress={() => setStage('idle')}>
+        <Ionicons name="camera-outline" size={18} color="#999" />
+        <Text style={styles.manualBtnText}>返回拍照／選圖</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -359,6 +477,11 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           resizeMode="contain"
         />
       )}
+      {!imageUri && lastAnalysisSource === 'text' ? (
+        <View style={styles.textAnalyzingPlaceholder}>
+          <MaterialCommunityIcons name="text-box-outline" size={48} color="#CCC" />
+        </View>
+      ) : null}
       <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 30 }} />
       <Text style={styles.loadingText}>AI 辨識中…</Text>
       <Text style={styles.loadingSubText}>
@@ -591,6 +714,12 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           <Text style={styles.manualBtnText}>回到 AI 辨識</Text>
         </TouchableOpacity>
       )}
+      {!imageUri && textDescription.trim().length > 0 && (
+        <TouchableOpacity style={styles.manualBtn} onPress={() => setStage('text')}>
+          <Ionicons name="arrow-back-outline" size={18} color="#999" />
+          <Text style={styles.manualBtnText}>回到文字描述</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 
@@ -619,12 +748,13 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
                 <Ionicons name="close" size={28} color="#333" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>
-                {stage === 'manual' ? '手動輸入' : 'AI 辨識食物'}
+                {stage === 'manual' ? '手動輸入' : stage === 'text' ? '文字描述' : 'AI 辨識食物'}
               </Text>
               <View style={styles.headerBtn} />
             </View>
 
             {stage === 'idle' && renderIdle()}
+            {stage === 'text' && renderText()}
             {stage === 'analyzing' && renderAnalyzing()}
             {stage === 'result' && renderResult()}
             {stage === 'manual' && renderManual()}
@@ -634,10 +764,19 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
       <GeminiConfigModal
         visible={showConfig}
-        onClose={() => setShowConfig(false)}
+        onClose={() => {
+          resumeAfterConfigRef.current = null;
+          setShowConfig(false);
+        }}
         onSuccess={() => {
           setShowConfig(false);
-          doAnalyze();
+          const mode = resumeAfterConfigRef.current;
+          resumeAfterConfigRef.current = null;
+          if (mode === 'text') {
+            doAnalyzeText();
+          } else {
+            doAnalyze();
+          }
         }}
       />
 
@@ -830,6 +969,34 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   manualBtnText: { color: '#999', fontSize: 14 },
+  textIntroCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8F5E9',
+  },
+  textIntroTitle: { fontSize: 17, fontWeight: 'bold', color: '#333', marginTop: 8 },
+  textIntroDesc: { fontSize: 13, color: '#777', marginTop: 8, textAlign: 'center', lineHeight: 20 },
+  textDescriptionInput: {
+    minHeight: 140,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#FFF',
+    marginBottom: 16,
+  },
+  textAnalyzingPlaceholder: {
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
 
   // Loading
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },

@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { MIN_FOOD_TEXT_DESCRIPTION_LENGTH } from "../constants/foodText";
 
 export interface FoodAnalysisResult {
   name: string;
@@ -6,6 +7,74 @@ export interface FoodAnalysisResult {
   protein: number;
   carbs: number;
   fat: number;
+}
+
+const NUTRITION_DECIMAL_FACTOR = 10;
+
+function sanitizeGeminiApiKey(apiKey: string): string {
+  const rawKey = (apiKey || "").trim();
+  return rawKey.replace(/[^\x20-\x7E]/g, "");
+}
+
+function roundMacrosFromParsed(parsed: {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  name?: string;
+}): FoodAnalysisResult {
+  const roundToOneDecimal = (n: number) =>
+    Math.round((n || 0) * NUTRITION_DECIMAL_FACTOR) / NUTRITION_DECIMAL_FACTOR;
+  return {
+    name: parsed.name || "未知食物",
+    calories: Math.round(parsed.calories || 0),
+    protein: roundToOneDecimal(parsed.protein ?? 0),
+    carbs: roundToOneDecimal(parsed.carbs ?? 0),
+    fat: roundToOneDecimal(parsed.fat ?? 0),
+  };
+}
+
+function parseFoodAnalysisJson(text: string): FoodAnalysisResult {
+  const cleaned = text.replace(/```json|```/g, "").trim();
+  const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+  return roundMacrosFromParsed({
+    name: parsed.name as string | undefined,
+    calories: parsed.calories as number | undefined,
+    protein: parsed.protein as number | undefined,
+    carbs: parsed.carbs as number | undefined,
+    fat: parsed.fat as number | undefined,
+  });
+}
+
+function mapGeminiError(error: unknown): Error {
+  const errorString = (error as { message?: string })?.message || "";
+
+  if (
+    errorString.includes("503") ||
+    errorString.includes("high demand") ||
+    errorString.includes("UNAVAILABLE")
+  ) {
+    return new Error("AI 目前使用人數過多（已達上限），請稍後再試。");
+  }
+
+  if (
+    errorString.includes("429") ||
+    errorString.includes("RESOURCE_EXHAUSTED")
+  ) {
+    return new Error("已達到 API 呼叫頻率限制，請稍候重試。");
+  }
+
+  if (
+    errorString.includes("API_KEY_INVALID") ||
+    errorString.includes("403") ||
+    errorString.includes("not found")
+  ) {
+    return new Error("API Key 無效或型號名稱錯誤，請至設定檢查。");
+  }
+
+  const errorMsg =
+    (error as { message?: string })?.message || "AI 辨識失敗，請檢查網路或 API Key";
+  return new Error(errorMsg);
 }
 
 /**
@@ -23,8 +92,7 @@ export async function analyzeFoodImage(
   modelName: string,
   hints: string = "",
 ): Promise<FoodAnalysisResult> {
-  const rawKey = (apiKey || "").trim();
-  const finalApiKey = rawKey.replace(/[^\x20-\x7E]/g, "");
+  const finalApiKey = sanitizeGeminiApiKey(apiKey);
 
   if (!finalApiKey) {
     throw new Error("未偵測到 API Key。");
@@ -89,54 +157,86 @@ export async function analyzeFoodImage(
     const text = response.text || "";
     if (!text) throw new Error("AI 未能產生內容");
 
-    let parsed: any;
     try {
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      parsed = JSON.parse(cleaned);
+      return parseFoodAnalysisJson(text);
     } catch {
       throw new Error("AI 回傳格式不正確");
     }
-
-    const ONE_DECIMAL_FACTOR = 10;
-    const roundToOneDecimal = (n: number) =>
-      Math.round((n || 0) * ONE_DECIMAL_FACTOR) / ONE_DECIMAL_FACTOR;
-    return {
-      name: parsed.name || "未知食物",
-      calories: Math.round(parsed.calories || 0),
-      protein: roundToOneDecimal(parsed.protein),
-      carbs: roundToOneDecimal(parsed.carbs),
-      fat: roundToOneDecimal(parsed.fat),
-    };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gemini Analysis Error:", error);
+    throw mapGeminiError(error);
+  }
+}
 
-    const errorString = error?.message || "";
+/**
+ * Estimate calories and macros from a text description (no photo).
+ */
+export async function analyzeFoodText(
+  description: string,
+  apiKey: string,
+  modelName: string,
+): Promise<FoodAnalysisResult> {
+  const trimmed = description.trim();
+  if (trimmed.length < MIN_FOOD_TEXT_DESCRIPTION_LENGTH) {
+    throw new Error(
+      `描述請至少 ${MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 個字（不含空白），並包含食物與份量或種類等資訊。`,
+    );
+  }
 
-    if (
-      errorString.includes("503") ||
-      errorString.includes("high demand") ||
-      errorString.includes("UNAVAILABLE")
-    ) {
-      throw new Error("AI 目前使用人數過多（已達上限），請稍後再試。");
+  const finalApiKey = sanitizeGeminiApiKey(apiKey);
+  if (!finalApiKey) {
+    throw new Error("未偵測到 API Key。");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: finalApiKey });
+
+  const prompt = `
+  你是一位專業且直覺敏銳的營養師。用戶無法提供照片，請僅依「文字描述」估算一餐的熱量與營養素。
+    1. 綜合描述中的主餐、配菜、份量、烹調方式、是否加料等線索；描述越具體，估算應越穩定。
+    2. 請以「合理、略偏保守」的方式估算，避免高估。若份量未寫明，請以一般常見一人份為準，不要預設為大份。
+    3. 嚴禁回傳 0 kcal 或未知食物（除非描述完全與食物無關）。
+    4. 以一人份為估算基準，並依食物「類型」調整：
+      - **主餐**（如一碗麵、一盤飯、漢堡、便當）：以一份主餐估算。其中「一碗麵」若為一般碗、非特大碗且非明顯高油脂湯頭，請優先落在約 400–650 kcal；僅在描述中明顯為大份量或配料極多時再提高。
+      - **小菜、配菜、單點小碟**（如滷味、小菜、單點豆腐/鴨血/豬耳朵等）：請以小份量估算（約半份或單碟份量），不要用「一整份主餐」的熱量。
+    5. 若描述中提到「小菜」「配菜」「小碟」「滷味」等，請以小份量估算；若提到「大碗」「加料」等，則可維持或提高估算。
+
+    用戶描述：
+    """${trimmed}"""
+
+    請嚴格以 JSON 格式回傳：
+    - "calories" 請給整數（大卡）。
+    - "protein"、"carbs"、"fat" 可為小數，至小數第一位（例如 12.5）。
+    {
+      "name": "食物名稱（例如：紅燒獅子頭、番茄牛肉麵）",
+      "calories": 大卡_整數,
+      "protein": 蛋白質克數,
+      "carbs": 碳水化合物克數,
+      "fat": 脂肪克數
     }
+    只回傳 JSON。
+    `;
 
-    if (
-      errorString.includes("429") ||
-      errorString.includes("RESOURCE_EXHAUSTED")
-    ) {
-      throw new Error("已達到 API 呼叫頻率限制，請稍候重試。");
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        // @ts-ignore
+        responseMimeType: "application/json",
+      },
+    });
+
+    const text = response.text || "";
+    if (!text) throw new Error("AI 未能產生內容");
+
+    try {
+      return parseFoodAnalysisJson(text);
+    } catch {
+      throw new Error("AI 回傳格式不正確");
     }
-
-    if (
-      errorString.includes("API_KEY_INVALID") ||
-      errorString.includes("403") ||
-      errorString.includes("not found")
-    ) {
-      throw new Error("API Key 無效或型號名稱錯誤，請至設定檢查。");
-    }
-
-    const errorMsg = error?.message || "AI 辨識失敗，請檢查網路或 API Key";
-    throw new Error(errorMsg);
+  } catch (error: unknown) {
+    console.error("Gemini Text Analysis Error:", error);
+    throw mapGeminiError(error);
   }
 }
 

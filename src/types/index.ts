@@ -45,6 +45,17 @@ export interface FoodLog {
   date: string; // ISO date
 }
 
+/** User-saved template meal (not tied to a specific daily log). */
+export interface SavedMeal {
+  id: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  createdAt?: string;
+}
+
 export interface WeightLog {
   id: string;
   weight: number;

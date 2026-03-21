@@ -10,18 +10,33 @@ import DatePickerModal from '../components/DatePickerModal';
 import EditFoodModal from '../components/EditFoodModal';
 import ExerciseFavoriteModal from '../components/ExerciseFavoriteModal';
 import FoodScanModal from '../components/FoodScanModal';
+import SavedMealsModal from '../components/SavedMealsModal';
 import { calculateMacroGoals } from '../utils/fitness';
 
 type TabType = 'DIET' | 'EXERCISE';
 
 export default function LogScreen() {
-  const { userProfile, exerciseLogs, addExerciseLog, deleteExerciseLog, foodLogs, addFoodLog, updateFoodLog, deleteFoodLog } = useAppContext();
+  const {
+    userProfile,
+    exerciseLogs,
+    addExerciseLog,
+    deleteExerciseLog,
+    foodLogs,
+    addFoodLog,
+    updateFoodLog,
+    deleteFoodLog,
+    addSavedMeal,
+  } = useAppContext();
   const [activeTab, setActiveTab] = useState<TabType>('DIET');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [favoriteModalVisible, setFavoriteModalVisible] = useState(false);
   const [foodScanModalVisible, setFoodScanModalVisible] = useState(false);
   const [editingFoodLog, setEditingFoodLog] = useState<FoodLog | null>(null);
+  const [savedMealsModalVisible, setSavedMealsModalVisible] = useState(false);
+  const [copyDatePickerVisible, setCopyDatePickerVisible] = useState(false);
+  const [logPendingCopy, setLogPendingCopy] = useState<FoodLog | null>(null);
+  const [copyPickerDate, setCopyPickerDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Macro Calculations for summary
   const currentFoodLogs = foodLogs.filter(log => log.date === selectedDate);
@@ -101,6 +116,53 @@ export default function LogScreen() {
     Alert.alert('成功', `已加入飲食紀錄：${result.name}`);
   };
 
+  const openFoodItemMenu = (log: FoodLog) => {
+    const todayIso = new Date().toISOString().split('T')[0];
+    Alert.alert(
+      '餐點操作',
+      log.name,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '複製到今天',
+          onPress: () => {
+            addFoodLog({
+              name: log.name,
+              calories: log.calories,
+              protein: log.protein ?? 0,
+              carbs: log.carbs ?? 0,
+              fat: log.fat ?? 0,
+              mealType: log.mealType,
+              date: todayIso,
+            });
+            Alert.alert('成功', '已複製到今天');
+          },
+        },
+        {
+          text: '複製到其他日期…',
+          onPress: () => {
+            setLogPendingCopy(log);
+            setCopyPickerDate(log.date);
+            setCopyDatePickerVisible(true);
+          },
+        },
+        {
+          text: '加入常用餐',
+          onPress: () => {
+            addSavedMeal({
+              name: log.name,
+              calories: log.calories,
+              protein: log.protein ?? 0,
+              carbs: log.carbs ?? 0,
+              fat: log.fat ?? 0,
+            });
+            Alert.alert('成功', '已加入常用餐');
+          },
+        },
+      ]
+    );
+  };
+
   const renderDietTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.aiCard}>
@@ -117,8 +179,16 @@ export default function LogScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionHeader}>
+      <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>{formatDateDisplay(selectedDate)} 飲食紀錄</Text>
+        <TouchableOpacity
+          style={styles.savedMealsBtn}
+          onPress={() => setSavedMealsModalVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="restaurant-outline" size={18} color="#4CAF50" />
+          <Text style={styles.savedMealsBtnText}>常用餐</Text>
+        </TouchableOpacity>
       </View>
 
       {currentFoodLogs.length > 0 ? (
@@ -152,6 +222,9 @@ export default function LogScreen() {
               </View>
             </View>
             <View style={styles.dietLogActions}>
+              <TouchableOpacity onPress={() => openFoodItemMenu(log)} style={styles.editBtn}>
+                <Ionicons name="ellipsis-horizontal" size={20} color="#C7C7CC" />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setEditingFoodLog(log)} style={styles.editBtn}>
                 <Ionicons name="pencil-outline" size={18} color="#C7C7CC" />
               </TouchableOpacity>
@@ -292,6 +365,36 @@ export default function LogScreen() {
         onClose={() => setDatePickerVisible(false)}
         onSelectDate={setSelectedDate}
         selectedDate={selectedDate}
+      />
+
+      <DatePickerModal
+        visible={copyDatePickerVisible}
+        onClose={() => {
+          setCopyDatePickerVisible(false);
+          setLogPendingCopy(null);
+        }}
+        onSelectDate={(d) => {
+          if (!logPendingCopy) return;
+          addFoodLog({
+            name: logPendingCopy.name,
+            calories: logPendingCopy.calories,
+            protein: logPendingCopy.protein ?? 0,
+            carbs: logPendingCopy.carbs ?? 0,
+            fat: logPendingCopy.fat ?? 0,
+            mealType: logPendingCopy.mealType,
+            date: d,
+          });
+          Alert.alert('成功', `已複製到 ${d}`);
+          setCopyDatePickerVisible(false);
+          setLogPendingCopy(null);
+        }}
+        selectedDate={copyPickerDate}
+      />
+
+      <SavedMealsModal
+        visible={savedMealsModalVisible}
+        onClose={() => setSavedMealsModalVisible(false)}
+        targetDate={selectedDate}
       />
 
       <ExerciseFavoriteModal
@@ -461,7 +564,22 @@ const styles = StyleSheet.create({
   },
   addBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   sectionHeader: { marginBottom: 15, paddingHorizontal: 5 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    paddingHorizontal: 5,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', flex: 1 },
+  savedMealsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  savedMealsBtnText: { fontSize: 14, fontWeight: '600', color: '#4CAF50' },
   logItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

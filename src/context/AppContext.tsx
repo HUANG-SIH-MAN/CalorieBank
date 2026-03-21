@@ -3,13 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
-import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog } from '../types';
+import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog, SavedMeal } from '../types';
 import type { WebBackupData } from '../services/googleDriveService';
 import * as dbService from '../services/dbService';
 
 interface AppContextType {
   userProfile: UserProfile | null;
   foodLogs: FoodLog[];
+  savedMeals: SavedMeal[];
   weightLogs: WeightLog[];
   waterLogs: WaterLog[];
   exerciseLogs: ExerciseLog[];
@@ -17,6 +18,9 @@ interface AppContextType {
   addFoodLog: (log: Omit<FoodLog, 'id'>) => void;
   updateFoodLog: (id: string, updates: Partial<Omit<FoodLog, 'id'>>) => void;
   deleteFoodLog: (id: string) => void;
+  addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void;
+  updateSavedMeal: (id: string, updates: Partial<Omit<SavedMeal, 'id'>>) => void;
+  deleteSavedMeal: (id: string) => void;
   addWeightLog: (log: Omit<WeightLog, 'id'>) => void;
   deleteWeightLog: (id: string) => void;
   addWaterLog: (amount: number, date: string) => void;
@@ -37,12 +41,14 @@ const STORAGE_KEYS = {
   WEIGHT_LOGS: '@weight_logs',
   WATER_LOGS: '@water_logs',
   EXERCISE_LOGS: '@exercise_logs',
+  SAVED_MEALS: '@saved_meals',
   MIGRATION_COMPLETED: '@db_migration_completed_v1',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userProfile, setProfileState] = useState<UserProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -120,9 +126,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadData = async (db: SQLite.SQLiteDatabase) => {
     try {
-      const [profile, foods, weights, waters, exercises] = await Promise.all([
+      const [profile, foods, meals, weights, waters, exercises] = await Promise.all([
         dbService.getUserProfile(db),
         dbService.getAllFoodLogs(db),
+        dbService.getAllSavedMeals(db),
         dbService.getAllWeightLogs(db),
         dbService.getAllWaterLogs(db),
         dbService.getAllExerciseLogs(db),
@@ -130,6 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setProfileState(profile);
       setFoodLogs(foods);
+      setSavedMeals(meals);
       setWeightLogs(weights);
       setWaterLogs(waters);
       setExerciseLogs(exercises);
@@ -142,9 +150,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loadDataFromAsyncStorage = async () => {
     try {
-      const [profileStr, foodStr, weightStr, waterStr, exerciseStr] = await Promise.all([
+      const [profileStr, foodStr, savedStr, weightStr, waterStr, exerciseStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE),
         AsyncStorage.getItem(STORAGE_KEYS.FOOD_LOGS),
+        AsyncStorage.getItem(STORAGE_KEYS.SAVED_MEALS),
         AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_LOGS),
         AsyncStorage.getItem(STORAGE_KEYS.WATER_LOGS),
         AsyncStorage.getItem(STORAGE_KEYS.EXERCISE_LOGS),
@@ -152,6 +161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (profileStr) setProfileState(JSON.parse(profileStr));
       if (foodStr) setFoodLogs(JSON.parse(foodStr));
+      if (savedStr) setSavedMeals(JSON.parse(savedStr));
       if (weightStr) setWeightLogs(JSON.parse(weightStr));
       if (waterStr) setWaterLogs(JSON.parse(waterStr));
       if (exerciseStr) setExerciseLogs(JSON.parse(exerciseStr));
@@ -202,6 +212,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await dbService.deleteFoodLogFromDb(dbRef.current, id);
     } else {
       await AsyncStorage.setItem(STORAGE_KEYS.FOOD_LOGS, JSON.stringify(updated));
+    }
+  };
+
+  const addSavedMeal = async (meal: Omit<SavedMeal, 'id'>) => {
+    const newMeal: SavedMeal = {
+      ...meal,
+      id: Date.now().toString(),
+      createdAt: meal.createdAt ?? new Date().toISOString(),
+    };
+    const updated = [newMeal, ...savedMeals];
+    setSavedMeals(updated);
+    if (dbRef.current) {
+      await dbService.saveSavedMeal(dbRef.current, newMeal);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_MEALS, JSON.stringify(updated));
+    }
+  };
+
+  const updateSavedMeal = async (id: string, updates: Partial<Omit<SavedMeal, 'id'>>) => {
+    const existing = savedMeals.find(m => m.id === id);
+    if (!existing) return;
+    const updatedMeal: SavedMeal = { ...existing, ...updates };
+    const updated = savedMeals.map(m => (m.id === id ? updatedMeal : m));
+    setSavedMeals(updated);
+    if (dbRef.current) {
+      await dbService.saveSavedMeal(dbRef.current, updatedMeal);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_MEALS, JSON.stringify(updated));
+    }
+  };
+
+  const deleteSavedMeal = async (id: string) => {
+    const updated = savedMeals.filter(m => m.id !== id);
+    setSavedMeals(updated);
+    if (dbRef.current) {
+      await dbService.deleteSavedMealFromDb(dbRef.current, id);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_MEALS, JSON.stringify(updated));
     }
   };
 
@@ -300,6 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Reset States
       setProfileState(null);
       setFoodLogs([]);
+      setSavedMeals([]);
       setWeightLogs([]);
       setWaterLogs([]);
       setExerciseLogs([]);
@@ -325,16 +374,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (dbRef.current) return;
     const profile = data.userProfile as UserProfile | null;
     const foods = (data.foodLogs || []) as FoodLog[];
+    const meals = (data.savedMeals || []) as SavedMeal[];
     const weights = (data.weightLogs || []) as WeightLog[];
     const waters = (data.waterLogs || []) as WaterLog[];
     const exercises = (data.exerciseLogs || []) as ExerciseLog[];
     setProfileState(profile ?? null);
     setFoodLogs(foods);
+    setSavedMeals(meals);
     setWeightLogs(weights);
     setWaterLogs(waters);
     setExerciseLogs(exercises);
     await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
     await AsyncStorage.setItem(STORAGE_KEYS.FOOD_LOGS, JSON.stringify(foods));
+    await AsyncStorage.setItem(STORAGE_KEYS.SAVED_MEALS, JSON.stringify(meals));
     await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_LOGS, JSON.stringify(weights));
     await AsyncStorage.setItem(STORAGE_KEYS.WATER_LOGS, JSON.stringify(waters));
     await AsyncStorage.setItem(STORAGE_KEYS.EXERCISE_LOGS, JSON.stringify(exercises));
@@ -343,6 +395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const value = useMemo(() => ({
     userProfile,
     foodLogs,
+    savedMeals,
     weightLogs,
     waterLogs,
     exerciseLogs,
@@ -350,6 +403,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addFoodLog,
     updateFoodLog,
     deleteFoodLog,
+    addSavedMeal,
+    updateSavedMeal,
+    deleteSavedMeal,
     addWeightLog,
     deleteWeightLog,
     addWaterLog,
@@ -360,7 +416,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     reloadFromDatabase,
     applyRestoredData,
     isLoading,
-  }), [userProfile, foodLogs, weightLogs, waterLogs, exerciseLogs, isLoading]);
+  }), [userProfile, foodLogs, savedMeals, weightLogs, waterLogs, exerciseLogs, isLoading]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

@@ -24,6 +24,7 @@ import * as googleDrive from '../services/googleDriveService';
 import { validateGeminiKey } from '../services/geminiService';
 import * as SecureStore from 'expo-secure-store';
 import GeminiConfigModal from '../components/GeminiConfigModal';
+import SavedMealsModal from '../components/SavedMealsModal';
 
 const SECURE_KEY = 'gemini_api_key';
 
@@ -40,6 +41,7 @@ export default function SettingsScreen() {
     reloadFromDatabase,
     applyRestoredData,
     foodLogs,
+    savedMeals,
     weightLogs,
     waterLogs,
     exerciseLogs,
@@ -52,6 +54,7 @@ export default function SettingsScreen() {
   // AI Settings
   const [apiKey, setApiKey] = useState('');
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [savedMealsModalVisible, setSavedMealsModalVisible] = useState(false);
 
   // Google Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -128,6 +131,7 @@ export default function SettingsScreen() {
           ? await googleDrive.backupToDriveWeb(googleUser.token, {
               userProfile: userProfile ?? null,
               foodLogs,
+              savedMeals,
               weightLogs,
               waterLogs,
               exerciseLogs,
@@ -433,6 +437,22 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
           <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
+
+          <TouchableOpacity
+            style={[styles.card, { marginTop: 12 }]}
+            onPress={() => setSavedMealsModalVisible(true)}
+          >
+            <View style={styles.aiCardContent}>
+              <View style={[styles.aiIconWrapper, { backgroundColor: '#E8F5E9' }]}>
+                <MaterialCommunityIcons name="food-turkey" size={26} color="#4CAF50" />
+              </View>
+              <View style={styles.aiTextWrapper}>
+                <Text style={styles.aiTitle}>常用餐／我的套餐</Text>
+                <Text style={styles.aiSubtitle}>管理模板並一鍵加入今日紀錄</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {ENABLE_GOOGLE_DRIVE_SYNC && (
@@ -526,6 +546,12 @@ export default function SettingsScreen() {
           setShowConfigModal(false);
           refreshKeyState();
         }}
+      />
+
+      <SavedMealsModal
+        visible={savedMealsModalVisible}
+        onClose={() => setSavedMealsModalVisible(false)}
+        targetDate={new Date().toISOString().split('T')[0]}
       />
     </SafeAreaView>
   );

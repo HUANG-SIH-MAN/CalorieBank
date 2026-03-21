@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog } from '../types';
+import { UserProfile, FoodLog, WeightLog, WaterLog, ExerciseLog, SavedMeal } from '../types';
 
 const DB_NAME = 'caloriebank.db';
 
@@ -65,6 +65,16 @@ export const initDatabase = async () => {
       durationMinutes INTEGER,
       date TEXT,
       timestamp TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_meals (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      calories INTEGER,
+      protein REAL,
+      carbs REAL,
+      fat REAL,
+      createdAt TEXT
     );
   `);
 
@@ -237,6 +247,48 @@ export const getAllExerciseLogs = async (db: SQLite.SQLiteDatabase): Promise<Exe
   return await db.getAllAsync<ExerciseLog>('SELECT * FROM exercise_logs ORDER BY date DESC');
 };
 
+// CRUD for Saved Meals (templates)
+export const saveSavedMeal = async (db: SQLite.SQLiteDatabase, meal: SavedMeal) => {
+  await db.runAsync(
+    'INSERT OR REPLACE INTO saved_meals (id, name, calories, protein, carbs, fat, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [
+      meal.id,
+      meal.name,
+      meal.calories,
+      meal.protein,
+      meal.carbs,
+      meal.fat,
+      meal.createdAt ?? null,
+    ]
+  );
+};
+
+export const deleteSavedMealFromDb = async (db: SQLite.SQLiteDatabase, id: string) => {
+  await db.runAsync('DELETE FROM saved_meals WHERE id = ?', [id]);
+};
+
+export const getAllSavedMeals = async (db: SQLite.SQLiteDatabase): Promise<SavedMeal[]> => {
+  const rows = await db.getAllAsync<{
+    id: string;
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    createdAt: string | null;
+  }>('SELECT * FROM saved_meals ORDER BY COALESCE(createdAt, id) DESC');
+
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    calories: r.calories,
+    protein: r.protein,
+    carbs: r.carbs,
+    fat: r.fat,
+    ...(r.createdAt ? { createdAt: r.createdAt } : {}),
+  }));
+};
+
 // Reset Database
 export const clearAllData = async (db: SQLite.SQLiteDatabase) => {
   await db.execAsync(`
@@ -245,5 +297,6 @@ export const clearAllData = async (db: SQLite.SQLiteDatabase) => {
     DELETE FROM weight_logs;
     DELETE FROM water_logs;
     DELETE FROM exercise_logs;
+    DELETE FROM saved_meals;
   `);
 };

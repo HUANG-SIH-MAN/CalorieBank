@@ -33,6 +33,8 @@ export interface WebBackupData {
   weightLogs: unknown[];
   waterLogs: unknown[];
   exerciseLogs: unknown[];
+  /** Optional: added in 2026; omit on legacy backups. */
+  savedMeals?: unknown[];
 }
 
 /**
