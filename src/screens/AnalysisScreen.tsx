@@ -7,12 +7,12 @@ import { LineChart as KitLineChart } from 'react-native-chart-kit'; // Better fo
 import { useAppContext } from '../context/AppContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { resolveWeightChangeDisplay } from '../utils/weightChangeInWindow';
 
 const { width } = Dimensions.get('window');
 
 const DAYS_FOR_WEEKLY_STATS = 7;
 const DAYS_FOR_MONTHLY_STATS = 30;
-const KCAL_PER_KG_WEIGHT_LOSS = 7700;
 const DEFAULT_DAILY_CALORIE_GOAL = 1833;
 
 export default function AnalysisScreen() {
@@ -190,9 +190,7 @@ export default function AnalysisScreen() {
 
   // --- 5. Statistics (only count days with records) ---
   const stats = useMemo(() => {
-    const dates30 = generateDateData(DAYS_FOR_MONTHLY_STATS);
     const dates7 = generateDateData(DAYS_FOR_WEEKLY_STATS);
-    const goal = userProfile?.dailyCalorieGoal ?? DEFAULT_DAILY_CALORIE_GOAL;
 
     // avgIntake7: only days with at least one food log
     let totalIntake7 = 0;
@@ -224,36 +222,8 @@ export default function AnalysisScreen() {
     const avgBurn7: number | null =
       activeDaysCount === 0 ? null : Math.round(totalBurnOnActiveDays / activeDaysCount);
 
-    // projectedWeightLoss: only days with food record; avg daily deficit then project to 30 days
-    let totalDeficitFromRecordedDays = 0;
-    let daysWithFoodIn30 = 0;
-    dates30.forEach(date => {
-      const dayFoodLogs = foodLogs.filter(log => log.date === date);
-      if (dayFoodLogs.length === 0) return;
-      const dayIntake = dayFoodLogs.reduce((s, l) => s + l.calories, 0);
-      const dayBurn = exerciseLogs
-        .filter(log => log.date === date)
-        .reduce((s, l) => s + l.caloriesBurned, 0);
-      totalDeficitFromRecordedDays += goal - dayIntake + dayBurn;
-      daysWithFoodIn30 += 1;
-    });
-    const avgDailyDeficit =
-      daysWithFoodIn30 > 0 ? totalDeficitFromRecordedDays / daysWithFoodIn30 : 0;
-    const projectedKgRaw: number | null =
-      daysWithFoodIn30 === 0
-        ? null
-        : (avgDailyDeficit * DAYS_FOR_MONTHLY_STATS) / KCAL_PER_KG_WEIGHT_LOSS;
-    const isWeightGain = projectedKgRaw != null && projectedKgRaw < 0;
-    const projectedWeightLabel =
-      projectedKgRaw == null
-        ? null
-        : isWeightGain
-          ? '預計增重 (30天)'
-          : '預計減重 (30天)';
-    const projectedWeightValue: string | null =
-      projectedKgRaw == null
-        ? null
-        : Math.abs(projectedKgRaw).toFixed(1);
+    const { label: weightChangeLabel, valueKg: weightChangeValueKg } =
+      resolveWeightChangeDisplay(weightLogs, generateDateData);
 
     const dates30ForBodyFat = generateDateData(DAYS_FOR_MONTHLY_STATS);
     const bodyFatLogs30 = weightLogs.filter(
@@ -275,12 +245,12 @@ export default function AnalysisScreen() {
     return {
       avgIntake7,
       avgBurn7,
-      projectedWeightLabel,
-      projectedWeightValue,
+      weightChangeLabel,
+      weightChangeValueKg,
       bodyFatChange30: bodyFatChange30 != null ? bodyFatChange30.toFixed(1) : null,
       bodyFatAvg30: bodyFatAvg30 != null ? bodyFatAvg30.toFixed(1) : null,
     };
-  }, [foodLogs, exerciseLogs, weightLogs, userProfile]);
+  }, [foodLogs, exerciseLogs, weightLogs]);
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -296,9 +266,10 @@ export default function AnalysisScreen() {
         <LinearGradient colors={['#FFFFFF', '#F8F9FA']} style={styles.mainStatsCard}>
           <View style={styles.statsTopRow}>
             <View style={styles.mainScoreWrapper}>
-              <Text style={styles.mainScoreLabel}>{stats.projectedWeightLabel ?? '預計減重 (30天)'}</Text>
+              <Text style={styles.mainScoreLabel}>{stats.weightChangeLabel}</Text>
               <Text style={styles.mainScoreValue}>
-                {stats.projectedWeightValue ?? '—'}<Text style={styles.mainScoreUnit}>{stats.projectedWeightValue != null ? 'kg' : ''}</Text>
+                {stats.weightChangeValueKg ?? '—'}
+                <Text style={styles.mainScoreUnit}>{stats.weightChangeValueKg != null ? 'kg' : ''}</Text>
               </Text>
             </View>
             <View style={styles.scoreDivider} />
