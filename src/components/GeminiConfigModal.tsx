@@ -24,6 +24,11 @@ interface GeminiConfigModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  /**
+   * 在 Web 上若外層已是全螢幕 Modal，再包一層 Modal 常無法顯示。
+   * 設為 true 時改為絕對定位覆蓋層（不另開 Modal）。
+   */
+  embedAsOverlay?: boolean;
 }
 
 const PRESET_MODELS = [
@@ -32,7 +37,12 @@ const PRESET_MODELS = [
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (深度辨識，處理慢)' },
 ];
 
-export default function GeminiConfigModal({ visible, onClose, onSuccess }: GeminiConfigModalProps) {
+export default function GeminiConfigModal({
+  visible,
+  onClose,
+  onSuccess,
+  embedAsOverlay = false,
+}: GeminiConfigModalProps) {
   const { userProfile, setUserProfile } = useAppContext();
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
@@ -321,27 +331,41 @@ export default function GeminiConfigModal({ visible, onClose, onSuccess }: Gemin
     </ScrollView>
   );
 
+  const sheet = (
+    <View style={styles.modalOverlay}>
+      <SafeAreaView style={styles.sheet} edges={['bottom']}>
+        <View style={styles.header}>
+          <View style={styles.dragBar} />
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <Ionicons name="close-circle" size={30} color="#DDD" />
+          </TouchableOpacity>
+        </View>
+
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+      </SafeAreaView>
+    </View>
+  );
+
+  if (embedAsOverlay) {
+    if (!visible) return null;
+    return <View style={styles.embedAsOverlayRoot}>{sheet}</View>;
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <SafeAreaView style={styles.sheet} edges={['bottom']}>
-          <View style={styles.header}>
-            <View style={styles.dragBar} />
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close-circle" size={30} color="#DDD" />
-            </TouchableOpacity>
-          </View>
-
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-        </SafeAreaView>
-      </View>
+      {sheet}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  embedAsOverlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100000,
+    elevation: 100000,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

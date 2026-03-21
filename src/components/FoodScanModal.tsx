@@ -167,6 +167,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
     if (!apiKey) {
       resumeAfterConfigRef.current = 'image';
+      setErrorMsg('');
       setShowConfig(true);
       return;
     }
@@ -202,9 +203,8 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const doAnalyzeText = async () => {
     const merged = buildTextDescriptionForApi();
     if (merged.length < MIN_FOOD_TEXT_DESCRIPTION_LENGTH) {
-      Alert.alert(
-        '描述太短',
-        `請至少輸入 ${MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 個字，並包含食物與份量或種類（可含店名）。`,
+      setErrorMsg(
+        `描述太短：至少 ${MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 個字（目前 ${merged.length} 字）。請補上份量、店名或配菜等，例如「連鎖店雞腿便當飯少」。`,
       );
       return;
     }
@@ -218,6 +218,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
 
     if (!apiKey) {
       resumeAfterConfigRef.current = 'text';
+      setErrorMsg('');
       setShowConfig(true);
       return;
     }
@@ -409,6 +410,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           setImageUri(null);
           setImageBase64(null);
           setHints('');
+          setErrorMsg('');
           setStage('text');
         }}
       >
@@ -445,10 +447,21 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         placeholder="例如：連鎖店照燒雞腿便當，飯吃一半、有配菜玉米"
         placeholderTextColor="#BBB"
         value={textDescription}
-        onChangeText={setTextDescription}
+        onChangeText={(t) => {
+          setTextDescription(t);
+          setErrorMsg('');
+        }}
         multiline
         textAlignVertical="top"
       />
+      <Text
+        style={[
+          styles.textLengthHint,
+          textDescription.trim().length < MIN_FOOD_TEXT_DESCRIPTION_LENGTH && styles.textLengthHintWarn,
+        ]}
+      >
+        已輸入 {textDescription.trim().length} 字，至少需要 {MIN_FOOD_TEXT_DESCRIPTION_LENGTH} 字
+      </Text>
 
       <TouchableOpacity style={styles.analyzeBtn} onPress={doAnalyzeText}>
         <MaterialCommunityIcons name="robot" size={22} color="#FFF" />
@@ -734,8 +747,9 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   };
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleRequestClose}>
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={handleRequestClose}>
+      {/* Web：父層需 position:relative，內嵌 overlay（Gemini embedAsOverlay）才能蓋滿 */}
+      <View style={[styles.modalInnerRoot, Platform.OS === 'web' && styles.modalInnerRootWeb]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -760,32 +774,33 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
             {stage === 'manual' && renderManual()}
           </SafeAreaView>
         </KeyboardAvoidingView>
-      </Modal>
 
-      <GeminiConfigModal
-        visible={showConfig}
-        onClose={() => {
-          resumeAfterConfigRef.current = null;
-          setShowConfig(false);
-        }}
-        onSuccess={() => {
-          setShowConfig(false);
-          const mode = resumeAfterConfigRef.current;
-          resumeAfterConfigRef.current = null;
-          if (mode === 'text') {
-            doAnalyzeText();
-          } else {
-            doAnalyze();
-          }
-        }}
-      />
+        <GeminiConfigModal
+          embedAsOverlay={Platform.OS === 'web'}
+          visible={showConfig}
+          onClose={() => {
+            resumeAfterConfigRef.current = null;
+            setShowConfig(false);
+          }}
+          onSuccess={() => {
+            setShowConfig(false);
+            const mode = resumeAfterConfigRef.current;
+            resumeAfterConfigRef.current = null;
+            if (mode === 'text') {
+              doAnalyzeText();
+            } else {
+              doAnalyze();
+            }
+          }}
+        />
 
-      <FoodTagEditorModal
-        visible={showTagEditor}
-        onClose={() => setShowTagEditor(false)}
-        tags={userProfile?.customFoodTags || DEFAULT_FOOD_TAGS}
-      />
-    </>
+        <FoodTagEditorModal
+          visible={showTagEditor}
+          onClose={() => setShowTagEditor(false)}
+          tags={userProfile?.customFoodTags || DEFAULT_FOOD_TAGS}
+        />
+      </View>
+    </Modal>
   );
 }
 
@@ -820,6 +835,8 @@ function ResultField({
 
 // ─── Styles ────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  modalInnerRoot: { flex: 1 },
+  modalInnerRootWeb: { position: 'relative' },
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   header: {
     height: 56,
@@ -989,8 +1006,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#FFF',
-    marginBottom: 16,
+    marginBottom: 8,
   },
+  textLengthHint: { fontSize: 13, color: '#888', marginBottom: 14 },
+  textLengthHintWarn: { color: '#E65100', fontWeight: '600' },
   textAnalyzingPlaceholder: {
     height: 120,
     justifyContent: 'center',

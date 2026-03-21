@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,11 +11,18 @@ import EditFoodModal from '../components/EditFoodModal';
 import ExerciseFavoriteModal from '../components/ExerciseFavoriteModal';
 import FoodScanModal from '../components/FoodScanModal';
 import SavedMealsModal from '../components/SavedMealsModal';
+import FoodLogActionSheet from '../components/FoodLogActionSheet';
+import MiniMacroBar from '../components/MiniMacroBar';
 import { calculateMacroGoals } from '../utils/fitness';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 
 type TabType = 'DIET' | 'EXERCISE';
 
+type LogScreenRouteParams = { openDietTab?: boolean };
+
 export default function LogScreen() {
+  const route = useRoute();
+  const navigation = useNavigation();
   const {
     userProfile,
     exerciseLogs,
@@ -37,6 +44,17 @@ export default function LogScreen() {
   const [copyDatePickerVisible, setCopyDatePickerVisible] = useState(false);
   const [logPendingCopy, setLogPendingCopy] = useState<FoodLog | null>(null);
   const [copyPickerDate, setCopyPickerDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [foodMenuLog, setFoodMenuLog] = useState<FoodLog | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const params = route.params as LogScreenRouteParams | undefined;
+      if (params?.openDietTab) {
+        setActiveTab('DIET');
+        navigation.setParams({ openDietTab: undefined } as never);
+      }
+    }, [route.params, navigation])
+  );
 
   // Macro Calculations for summary
   const currentFoodLogs = foodLogs.filter(log => log.date === selectedDate);
@@ -116,51 +134,35 @@ export default function LogScreen() {
     Alert.alert('成功', `已加入飲食紀錄：${result.name}`);
   };
 
-  const openFoodItemMenu = (log: FoodLog) => {
+  const handleFoodMenuCopyToToday = (log: FoodLog) => {
     const todayIso = new Date().toISOString().split('T')[0];
-    Alert.alert(
-      '餐點操作',
-      log.name,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '複製到今天',
-          onPress: () => {
-            addFoodLog({
-              name: log.name,
-              calories: log.calories,
-              protein: log.protein ?? 0,
-              carbs: log.carbs ?? 0,
-              fat: log.fat ?? 0,
-              mealType: log.mealType,
-              date: todayIso,
-            });
-            Alert.alert('成功', '已複製到今天');
-          },
-        },
-        {
-          text: '複製到其他日期…',
-          onPress: () => {
-            setLogPendingCopy(log);
-            setCopyPickerDate(log.date);
-            setCopyDatePickerVisible(true);
-          },
-        },
-        {
-          text: '加入常用餐',
-          onPress: () => {
-            addSavedMeal({
-              name: log.name,
-              calories: log.calories,
-              protein: log.protein ?? 0,
-              carbs: log.carbs ?? 0,
-              fat: log.fat ?? 0,
-            });
-            Alert.alert('成功', '已加入常用餐');
-          },
-        },
-      ]
-    );
+    addFoodLog({
+      name: log.name,
+      calories: log.calories,
+      protein: log.protein ?? 0,
+      carbs: log.carbs ?? 0,
+      fat: log.fat ?? 0,
+      mealType: log.mealType,
+      date: todayIso,
+    });
+    Alert.alert('成功', '已複製到今天');
+  };
+
+  const handleFoodMenuPickOtherDate = (log: FoodLog) => {
+    setLogPendingCopy(log);
+    setCopyPickerDate(log.date);
+    setCopyDatePickerVisible(true);
+  };
+
+  const handleFoodMenuAddSavedMeal = (log: FoodLog) => {
+    addSavedMeal({
+      name: log.name,
+      calories: log.calories,
+      protein: log.protein ?? 0,
+      carbs: log.carbs ?? 0,
+      fat: log.fat ?? 0,
+    });
+    Alert.alert('成功', '已加入常用餐');
   };
 
   const renderDietTab = () => (
@@ -222,7 +224,7 @@ export default function LogScreen() {
               </View>
             </View>
             <View style={styles.dietLogActions}>
-              <TouchableOpacity onPress={() => openFoodItemMenu(log)} style={styles.editBtn}>
+              <TouchableOpacity onPress={() => setFoodMenuLog(log)} style={styles.editBtn}>
                 <Ionicons name="ellipsis-horizontal" size={20} color="#C7C7CC" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setEditingFoodLog(log)} style={styles.editBtn}>
@@ -395,6 +397,15 @@ export default function LogScreen() {
         visible={savedMealsModalVisible}
         onClose={() => setSavedMealsModalVisible(false)}
         targetDate={selectedDate}
+      />
+
+      <FoodLogActionSheet
+        visible={foodMenuLog !== null}
+        log={foodMenuLog}
+        onClose={() => setFoodMenuLog(null)}
+        onCopyToToday={handleFoodMenuCopyToToday}
+        onPickOtherDate={handleFoodMenuPickOtherDate}
+        onAddToSavedMeals={handleFoodMenuAddSavedMeal}
       />
 
       <ExerciseFavoriteModal
@@ -655,33 +666,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 15,
   },
-  miniMacroItem: { flex: 1 },
-  miniMacroLabel: { fontSize: 11, color: '#333', fontWeight: 'bold' },
-  miniMacroPercent: { fontSize: 10, color: '#AEAEB2' },
-  miniMacroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 4 },
-  miniBarBg: { height: 3, backgroundColor: '#F2F2F7', borderRadius: 1.5, overflow: 'hidden' },
-  miniBarFill: { height: '100%', borderRadius: 1.5 },
   dietLogActions: { flexDirection: 'row', alignItems: 'center' },
   editBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   deleteBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });
-
-function MiniMacroBar({ label, value, goal, color }: { label: string, value: number, goal: number, color: string }) {
-  const safeGoal = goal > 0 ? goal : 1;
-  const progress = Math.min(Math.max(0, isFinite(value / safeGoal) ? value / safeGoal : 0), 1);
-
-  return (
-    <View style={styles.miniMacroItem}>
-      <View style={styles.miniMacroHeader}>
-        <Text style={styles.miniMacroLabel}>{label}</Text>
-        <Text style={styles.miniMacroPercent}>{Math.round(value)}g</Text>
-      </View>
-      <View style={styles.miniBarBg}>
-        <View style={[styles.miniBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-}
 
 function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
   const safeTarget = target > 0 ? target : 1;

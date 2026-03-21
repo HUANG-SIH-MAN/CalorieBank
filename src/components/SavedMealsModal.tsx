@@ -10,12 +10,16 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { SavedMeal } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { getMealTypeByTime } from '../utils/time';
+import { calculateMacroGoals } from '../utils/fitness';
+import MiniMacroBar from './MiniMacroBar';
 
 const NUTRITION_DECIMAL_FACTOR = 10;
 
@@ -31,13 +35,22 @@ interface SavedMealsModalProps {
 }
 
 export default function SavedMealsModal({ visible, onClose, targetDate }: SavedMealsModalProps) {
-  const { savedMeals, addSavedMeal, updateSavedMeal, deleteSavedMeal, addFoodLog } = useAppContext();
+  const navigation = useNavigation();
+  const { userProfile, savedMeals, addSavedMeal, updateSavedMeal, deleteSavedMeal, addFoodLog } = useAppContext();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [formName, setFormName] = useState('');
   const [formCalories, setFormCalories] = useState('');
   const [formProtein, setFormProtein] = useState('');
   const [formCarbs, setFormCarbs] = useState('');
   const [formFat, setFormFat] = useState('');
+  const [mealPendingDelete, setMealPendingDelete] = useState<SavedMeal | null>(null);
+
+  const calorieGoal = userProfile?.dailyCalorieGoal ?? 1833;
+  const macroGoals = calculateMacroGoals(
+    calorieGoal,
+    userProfile?.weight ?? 70,
+    userProfile?.goalWeight ?? 70
+  );
 
   useEffect(() => {
     if (!visible) {
@@ -47,6 +60,7 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
       setFormProtein('');
       setFormCarbs('');
       setFormFat('');
+      setMealPendingDelete(null);
     }
   }, [visible]);
 
@@ -92,7 +106,7 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
     setEditingId(null);
   };
 
-  const applyMeal = (meal: SavedMeal) => {
+  const applyMealToLog = (meal: SavedMeal) => {
     addFoodLog({
       name: meal.name,
       calories: meal.calories,
@@ -102,87 +116,136 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
       mealType: getMealTypeByTime(),
       date: targetDate,
     });
-    Alert.alert('成功', `已加入 ${targetDate} 的飲食紀錄`);
+    onClose();
+    (navigation as { navigate: (name: string, params?: object) => void }).navigate('紀錄', {
+      openDietTab: true,
+    });
   };
 
-  const confirmDelete = (meal: SavedMeal) => {
-    Alert.alert('刪除常用餐', `確定刪除「${meal.name}」？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '刪除', style: 'destructive', onPress: () => deleteSavedMeal(meal.id) },
-    ]);
+  const confirmDelete = () => {
+    if (!mealPendingDelete) return;
+    deleteSavedMeal(mealPendingDelete.id);
+    setMealPendingDelete(null);
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <>
+      <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <SafeAreaView style={styles.container} edges={['top']}>
+            <View style={styles.header}>
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>常用餐／我的套餐</Text>
+              <TouchableOpacity onPress={startNew} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Ionicons name="add-circle-outline" size={26} color="#4CAF50" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {editingId !== null && (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>{editingId === 'new' ? '新增常用餐' : '編輯常用餐'}</Text>
+                  <Field label="名稱 *" value={formName} onChangeText={setFormName} />
+                  <Field label="熱量（kcal）*" value={formCalories} onChangeText={setFormCalories} numeric />
+                  <Field label="蛋白質（g）" value={formProtein} onChangeText={setFormProtein} numeric />
+                  <Field label="碳水（g）" value={formCarbs} onChangeText={setFormCarbs} numeric />
+                  <Field label="脂肪（g）" value={formFat} onChangeText={setFormFat} numeric />
+                  <View style={styles.formActions}>
+                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => setEditingId(null)}>
+                      <Text style={styles.secondaryBtnText}>取消</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.primaryBtn} onPress={saveForm}>
+                      <Text style={styles.primaryBtnText}>儲存</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {savedMeals.length === 0 && editingId === null ? (
+                <Text style={styles.empty}>尚無常用餐，點右上角 + 新增</Text>
+              ) : (
+                editingId === null &&
+                savedMeals.map(meal => (
+                  <View key={meal.id} style={styles.dietLogItem}>
+                    <View style={styles.dietLogContent}>
+                      <View style={styles.logItemHeaderRow}>
+                        <Text style={styles.logItemName} numberOfLines={2}>{meal.name}</Text>
+                        <Text style={styles.logItemCalories}>{meal.calories} kcal</Text>
+                      </View>
+                      <View style={styles.miniMacroContainer}>
+                        <MiniMacroBar
+                          label="蛋白質"
+                          value={meal.protein || 0}
+                          goal={macroGoals.protein}
+                          color="#FF7043"
+                        />
+                        <MiniMacroBar
+                          label="碳水"
+                          value={meal.carbs || 0}
+                          goal={macroGoals.carbs}
+                          color="#4CAF50"
+                        />
+                        <MiniMacroBar
+                          label="脂肪"
+                          value={meal.fat || 0}
+                          goal={macroGoals.fat}
+                          color="#FBC02D"
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.dietLogActions}>
+                      <TouchableOpacity onPress={() => applyMealToLog(meal)} style={styles.iconBtn}>
+                        <Ionicons name="add-circle" size={22} color="#4CAF50" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => startEdit(meal)} style={styles.iconBtn}>
+                        <Ionicons name="pencil" size={20} color="#007AFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setMealPendingDelete(meal)} style={styles.iconBtn}>
+                        <Ionicons name="trash-outline" size={20} color="#999" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={mealPendingDelete !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMealPendingDelete(null)}
       >
-        <SafeAreaView style={styles.container} edges={['top']}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close" size={26} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>常用餐／我的套餐</Text>
-            <TouchableOpacity onPress={startNew} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="add-circle-outline" size={26} color="#4CAF50" />
-            </TouchableOpacity>
+        <View style={styles.deleteOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMealPendingDelete(null)} />
+          <View style={styles.deleteCard}>
+            <Text style={styles.deleteTitle}>刪除常用餐？</Text>
+            <Text style={styles.deleteBody} numberOfLines={2}>
+              {mealPendingDelete?.name ?? ''}
+            </Text>
+            <View style={styles.deleteActions}>
+              <TouchableOpacity style={styles.deleteCancelBtn} onPress={() => setMealPendingDelete(null)}>
+                <Text style={styles.deleteCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteConfirmBtn} onPress={confirmDelete}>
+                <Text style={styles.deleteConfirmText}>刪除</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {editingId !== null && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>{editingId === 'new' ? '新增常用餐' : '編輯常用餐'}</Text>
-                <Field label="名稱 *" value={formName} onChangeText={setFormName} />
-                <Field label="熱量（kcal）*" value={formCalories} onChangeText={setFormCalories} numeric />
-                <Field label="蛋白質（g）" value={formProtein} onChangeText={setFormProtein} numeric />
-                <Field label="碳水（g）" value={formCarbs} onChangeText={setFormCarbs} numeric />
-                <Field label="脂肪（g）" value={formFat} onChangeText={setFormFat} numeric />
-                <View style={styles.formActions}>
-                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => setEditingId(null)}>
-                    <Text style={styles.secondaryBtnText}>取消</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.primaryBtn} onPress={saveForm}>
-                    <Text style={styles.primaryBtnText}>儲存</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {savedMeals.length === 0 && editingId === null ? (
-              <Text style={styles.empty}>尚無常用餐，點右上角 + 新增</Text>
-            ) : (
-              editingId === null &&
-              savedMeals.map(meal => (
-                <View key={meal.id} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowName} numberOfLines={2}>{meal.name}</Text>
-                    <Text style={styles.rowSub}>
-                      {meal.calories} kcal · P {meal.protein} / C {meal.carbs} / F {meal.fat}
-                    </Text>
-                  </View>
-                  <View style={styles.rowActions}>
-                    <TouchableOpacity onPress={() => applyMeal(meal)} style={styles.iconBtn}>
-                      <Ionicons name="add-circle" size={22} color="#4CAF50" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => startEdit(meal)} style={styles.iconBtn}>
-                      <Ionicons name="pencil" size={20} color="#007AFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => confirmDelete(meal)} style={styles.iconBtn}>
-                      <Ionicons name="trash-outline" size={20} color="#999" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -261,19 +324,60 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   empty: { textAlign: 'center', color: '#999', marginTop: 40, fontSize: 15 },
-  row: {
+  dietLogItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 14,
+    padding: 16,
+    borderRadius: 20,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#EEE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
   },
-  rowMain: { flex: 1, marginRight: 8 },
-  rowName: { fontSize: 16, fontWeight: '600', color: '#333' },
-  rowSub: { fontSize: 12, color: '#999', marginTop: 4 },
-  rowActions: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { padding: 6 },
+  dietLogContent: { flex: 1, marginRight: 10 },
+  logItemHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  logItemName: { fontSize: 16, fontWeight: 'bold', color: '#333', flex: 1, marginRight: 8 },
+  logItemCalories: { fontSize: 14, fontWeight: 'bold', color: '#8E8E93' },
+  miniMacroContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 15,
+  },
+  dietLogActions: { flexDirection: 'row', alignItems: 'center' },
+  iconBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  deleteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  deleteCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 340,
+  },
+  deleteTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 8 },
+  deleteBody: { fontSize: 15, color: '#666', marginBottom: 20 },
+  deleteActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  deleteCancelBtn: { paddingVertical: 10, paddingHorizontal: 16 },
+  deleteCancelText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
+  deleteConfirmBtn: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  deleteConfirmText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
 });
