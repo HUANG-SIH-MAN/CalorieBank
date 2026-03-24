@@ -18,6 +18,8 @@ export interface FoodLogActionSheetProps {
   onCopyToToday: (log: FoodLog) => void;
   onPickOtherDate: (log: FoodLog) => void;
   onAddToSavedMeals: (log: FoodLog) => void;
+  onEdit: (log: FoodLog) => void;
+  onDelete: (log: FoodLog) => void;
 }
 
 export default function FoodLogActionSheet({
@@ -27,6 +29,8 @@ export default function FoodLogActionSheet({
   onCopyToToday,
   onPickOtherDate,
   onAddToSavedMeals,
+  onEdit,
+  onDelete,
 }: FoodLogActionSheetProps) {
   const open = visible && log != null;
 
@@ -81,6 +85,26 @@ export default function FoodLogActionSheet({
             >
               <Ionicons name="restaurant-outline" size={22} color="#4CAF50" />
               <Text style={[styles.rowText, styles.rowTextAccent]}>加入常用餐</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => run(onEdit)}
+              activeOpacity={0.65}
+            >
+              <Ionicons name="pencil-outline" size={22} color="#333" />
+              <Text style={styles.rowText}>編輯</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CCC" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => run(onDelete)}
+              activeOpacity={0.65}
+            >
+              <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+              <Text style={[styles.rowText, styles.rowTextDestructive]}>刪除</Text>
               <Ionicons name="chevron-forward" size={18} color="#CCC" />
             </TouchableOpacity>
 
@@ -142,6 +166,7 @@ const styles = StyleSheet.create({
   },
   rowText: { flex: 1, fontSize: 16, color: '#333' },
   rowTextAccent: { color: '#2E7D32', fontWeight: '600' },
+  rowTextDestructive: { color: '#FF3B30', fontWeight: '600' },
   cancelBtn: {
     marginTop: 8,
     paddingVertical: 14,

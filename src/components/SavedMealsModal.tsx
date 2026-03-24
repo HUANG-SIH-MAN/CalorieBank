@@ -12,7 +12,7 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SavedMeal } from '../types';
@@ -22,6 +22,18 @@ import { calculateMacroGoals } from '../utils/fitness';
 import MiniMacroBar from './MiniMacroBar';
 
 const NUTRITION_DECIMAL_FACTOR = 10;
+
+/** Compact action icons; hitSlop keeps taps easy without wide layout boxes. */
+const SAVED_MEAL_ACTION_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const;
+const SAVED_MEAL_ACTION_ICON_PADDING_H = 1;
+const SAVED_MEAL_ACTION_ICON_PADDING_V = 6;
+/** Space between + / edit / delete; compact but not touching. */
+const SAVED_MEAL_ACTION_ROW_GAP = 9;
+const SAVED_MEAL_ACTION_ICON_SIZE_ADD = 22;
+const SAVED_MEAL_ACTION_ICON_SIZE_EDIT = 20;
+const SAVED_MEAL_ACTION_ICON_SIZE_DELETE = 20;
+
+const MODAL_SCROLL_BASE_PADDING_BOTTOM = 24;
 
 function roundNutritionToOneDecimal(value: number): number {
   return Math.round(value * NUTRITION_DECIMAL_FACTOR) / NUTRITION_DECIMAL_FACTOR;
@@ -35,6 +47,7 @@ interface SavedMealsModalProps {
 }
 
 export default function SavedMealsModal({ visible, onClose, targetDate }: SavedMealsModalProps) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { userProfile, savedMeals, addSavedMeal, updateSavedMeal, deleteSavedMeal, addFoodLog } = useAppContext();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
@@ -148,7 +161,10 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
 
             <ScrollView
               style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: MODAL_SCROLL_BASE_PADDING_BOTTOM + insets.bottom },
+              ]}
               keyboardShouldPersistTaps="handled"
             >
               {editingId !== null && (
@@ -177,8 +193,10 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
                 savedMeals.map(meal => (
                   <View key={meal.id} style={styles.dietLogItem}>
                     <View style={styles.dietLogContent}>
-                      <View style={styles.logItemHeaderRow}>
-                        <Text style={styles.logItemName} numberOfLines={2}>{meal.name}</Text>
+                      <View style={styles.logItemTitleBlock}>
+                        <Text style={styles.logItemName} numberOfLines={2}>
+                          {meal.name}
+                        </Text>
                         <Text style={styles.logItemCalories}>{meal.calories} kcal</Text>
                       </View>
                       <View style={styles.miniMacroContainer}>
@@ -203,14 +221,30 @@ export default function SavedMealsModal({ visible, onClose, targetDate }: SavedM
                       </View>
                     </View>
                     <View style={styles.dietLogActions}>
-                      <TouchableOpacity onPress={() => applyMealToLog(meal)} style={styles.iconBtn}>
-                        <Ionicons name="add-circle" size={22} color="#4CAF50" />
+                      <TouchableOpacity
+                        onPress={() => applyMealToLog(meal)}
+                        style={styles.iconBtn}
+                        hitSlop={SAVED_MEAL_ACTION_HIT_SLOP}
+                      >
+                        <Ionicons name="add-circle" size={SAVED_MEAL_ACTION_ICON_SIZE_ADD} color="#4CAF50" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => startEdit(meal)} style={styles.iconBtn}>
-                        <Ionicons name="pencil" size={20} color="#007AFF" />
+                      <TouchableOpacity
+                        onPress={() => startEdit(meal)}
+                        style={styles.iconBtn}
+                        hitSlop={SAVED_MEAL_ACTION_HIT_SLOP}
+                      >
+                        <Ionicons name="pencil" size={SAVED_MEAL_ACTION_ICON_SIZE_EDIT} color="#007AFF" />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setMealPendingDelete(meal)} style={styles.iconBtn}>
-                        <Ionicons name="trash-outline" size={20} color="#999" />
+                      <TouchableOpacity
+                        onPress={() => setMealPendingDelete(meal)}
+                        style={styles.iconBtn}
+                        hitSlop={SAVED_MEAL_ACTION_HIT_SLOP}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={SAVED_MEAL_ACTION_ICON_SIZE_DELETE}
+                          color="#999"
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -288,7 +322,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: 'bold', color: '#333' },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
+  scrollContent: { padding: 16 },
   card: {
     backgroundColor: '#FFF',
     borderRadius: 16,
@@ -338,22 +372,34 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 1,
   },
-  dietLogContent: { flex: 1, marginRight: 10 },
-  logItemHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  dietLogContent: { flex: 1, marginRight: 4, minWidth: 0 },
+  logItemTitleBlock: {
     marginBottom: 12,
   },
-  logItemName: { fontSize: 16, fontWeight: 'bold', color: '#333', flex: 1, marginRight: 8 },
-  logItemCalories: { fontSize: 14, fontWeight: 'bold', color: '#8E8E93' },
+  logItemName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  logItemCalories: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E8E93',
+    marginTop: 4,
+  },
   miniMacroContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 15,
   },
-  dietLogActions: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  dietLogActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: SAVED_MEAL_ACTION_ROW_GAP,
+  },
+  iconBtn: {
+    paddingHorizontal: SAVED_MEAL_ACTION_ICON_PADDING_H,
+    paddingVertical: SAVED_MEAL_ACTION_ICON_PADDING_V,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   deleteOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

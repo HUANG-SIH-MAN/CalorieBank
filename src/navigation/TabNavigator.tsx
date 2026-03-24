@@ -12,10 +12,10 @@ const Tab = createBottomTabNavigator();
 
 const TAB_BAR_BASE_PADDING_BOTTOM = 8;
 const TAB_BAR_PADDING_TOP = 10;
-/** When the OS reports 0 bottom inset (common on Android 15+ / edge-to-edge), tab bar still sits under system nav — reserve at least this (≈ 3-button bar). */
-const ANDROID_MIN_BOTTOM_INSET_WHEN_UNREPORTED = 48;
-/** Extra gap above system navigation (~0.2cm on typical phone density; was ~1cm). */
-const TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM = 8;
+/** When the OS reports 0 bottom inset (common on Android 15+ / edge-to-edge), tab bar still sits under system nav — reserve at least this (3-button bar + common OEM padding). */
+const ANDROID_MIN_BOTTOM_INSET_WHEN_UNREPORTED = 56;
+/** Extra gap between tab labels and system home/back/recents so taps do not feel cramped. */
+const TAB_BAR_EXTRA_CLEARANCE_ABOVE_SYSTEM_NAV = 14;
 const TAB_BAR_HEIGHT_ANDROID = 100;
 const TAB_BAR_HEIGHT_IOS = 95;
 
@@ -27,9 +27,9 @@ export default function TabNavigator() {
     Platform.OS === 'android'
       ? Math.max(rawBottomInset, ANDROID_MIN_BOTTOM_INSET_WHEN_UNREPORTED)
       : rawBottomInset;
-  const bottomInset = baseBottomInset + TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM;
+  const bottomInset = baseBottomInset + TAB_BAR_EXTRA_CLEARANCE_ABOVE_SYSTEM_NAV;
   const extraTabBarHeightForInset =
-    Math.max(0, baseBottomInset - rawBottomInset) + TAB_BAR_EXTRA_CLEARANCE_APPROX_POINT_TWO_CM;
+    Math.max(0, baseBottomInset - rawBottomInset) + TAB_BAR_EXTRA_CLEARANCE_ABOVE_SYSTEM_NAV;
 
   return (
     <Tab.Navigator

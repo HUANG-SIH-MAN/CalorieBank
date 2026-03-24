@@ -170,6 +170,21 @@ export default function LogScreen() {
     Alert.alert('成功', '已加入常用餐');
   };
 
+  const handleFoodMenuEdit = (log: FoodLog) => {
+    setEditingFoodLog(log);
+  };
+
+  const handleFoodMenuDelete = (log: FoodLog) => {
+    Alert.alert('刪除紀錄？', `確定要刪除「${log.name}」嗎？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '刪除',
+        style: 'destructive',
+        onPress: () => deleteFoodLog(log.id),
+      },
+    ]);
+  };
+
   const renderDietTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.aiCard}>
@@ -229,14 +244,13 @@ export default function LogScreen() {
               </View>
             </View>
             <View style={styles.dietLogActions}>
-              <TouchableOpacity onPress={() => setFoodMenuLog(log)} style={styles.editBtn}>
-                <Ionicons name="ellipsis-horizontal" size={20} color="#C7C7CC" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setEditingFoodLog(log)} style={styles.editBtn}>
-                <Ionicons name="pencil-outline" size={18} color="#C7C7CC" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => deleteFoodLog(log.id)} style={styles.deleteBtn}>
-                <Ionicons name="trash-outline" size={18} color="#C7C7CC" />
+              <TouchableOpacity
+                onPress={() => setFoodMenuLog(log)}
+                style={styles.dietLogMoreBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="更多操作"
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color="#C7C7CC" />
               </TouchableOpacity>
             </View>
           </View>
@@ -411,6 +425,8 @@ export default function LogScreen() {
         onCopyToToday={handleFoodMenuCopyToToday}
         onPickOtherDate={handleFoodMenuPickOtherDate}
         onAddToSavedMeals={handleFoodMenuAddSavedMeal}
+        onEdit={handleFoodMenuEdit}
+        onDelete={handleFoodMenuDelete}
       />
 
       <ExerciseFavoriteModal
@@ -658,7 +674,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 1,
   },
-  dietLogContent: { flex: 1, marginRight: 10 },
+  dietLogContent: { flex: 1, marginRight: 6, minWidth: 0 },
   logItemHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -671,9 +687,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 15,
   },
-  dietLogActions: { flexDirection: 'row', alignItems: 'center' },
-  editBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  deleteBtn: { padding: 12, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  dietLogActions: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
+  dietLogMoreBtn: { padding: 10, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });
 
 function MacroProgress({ label, current, target, color }: { label: string, current: number, target: number, color: string }) {
