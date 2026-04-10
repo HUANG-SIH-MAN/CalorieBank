@@ -203,7 +203,6 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         console.log('[FoodScan] Gemini error:', geminiErr.message, '| isOverload:', isOverload, '| groqKey:', !!groqKey);
         if (isOverload) {
           if (groqKey) {
-            setErrorMsg('Gemini 繁忙，正在切換備用 AI...');
             res = await analyzeGroqFoodImage(imageBase64, imageMime, groqKey, hints);
           } else {
             setStage('idle');
@@ -277,7 +276,6 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         console.log('[FoodScan] Gemini text error:', geminiErr.message, '| isOverload:', isOverload, '| groqKey:', !!groqKey);
         if (isOverload) {
           if (groqKey) {
-            setErrorMsg('Gemini 繁忙，正在切換備用 AI...');
             res = await analyzeGroqFoodText(merged, groqKey);
           } else {
             setStage('idle');
