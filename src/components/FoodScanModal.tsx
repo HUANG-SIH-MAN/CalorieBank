@@ -26,10 +26,6 @@ import { calculateMacroGoals } from '../utils/fitness';
 import { getMealTypeByTime, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 import GeminiConfigModal from './GeminiConfigModal';
 import FoodTagEditorModal from './FoodTagEditorModal';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 
 const SECURE_KEY = 'gemini_api_key';
 const GROQ_SECURE_KEY = 'groq_api_key';
@@ -101,44 +97,9 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const [manualCarbs, setManualCarbs] = useState('');
   const [manualFat, setManualFat] = useState('');
   const [textDescription, setTextDescription] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
-
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>(getMealTypeByTime());
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState('1');
-
-  useSpeechRecognitionEvent('start', () => setIsListening(true));
-  useSpeechRecognitionEvent('end', () => setIsListening(false));
-  useSpeechRecognitionEvent('error', (event) => {
-    setIsListening(false);
-    setSpeechError(event?.message ?? '語音辨識失敗');
-  });
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event?.results?.[0]?.transcript ?? '';
-    setTextDescription(transcript);
-    setErrorMsg('');
-    if (event?.isFinal) setIsListening(false);
-  });
-
-  const handleMicPress = async () => {
-    if (isListening) {
-      ExpoSpeechRecognitionModule.stop();
-      return;
-    }
-    setSpeechError(null);
-    const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!granted) {
-      Alert.alert('需要麥克風權限', '請在設定中允許 CalorieBank 使用麥克風與語音辨識。');
-      return;
-    }
-    ExpoSpeechRecognitionModule.start({
-      lang: 'zh-TW',
-      interimResults: true,
-      continuous: false,
-      requiresOnDeviceRecognition: false,
-    });
-  };
 
   const resetAll = () => {
     setStage('idle');
@@ -154,9 +115,6 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setManualCarbs('');
     setManualFat('');
     setTextDescription('');
-    setIsListening(false);
-    setSpeechError(null);
-    ExpoSpeechRecognitionModule.stop();
     setLastAnalysisSource(null);
     setSelectedMealType(getMealTypeByTime());
     setPortionMultiplier('1');
@@ -543,9 +501,8 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         </View>
       ) : null}
 
-      <View style={styles.textInputRow}>
-        <TextInput
-          style={[styles.textDescriptionInput, styles.textDescriptionInputFlex]}
+      <TextInput
+          style={styles.textDescriptionInput}
           placeholder="例如：連鎖店照燒雞腿便當，飯吃一半、有配菜玉米"
           placeholderTextColor="#BBB"
           value={textDescription}
@@ -555,23 +512,7 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
           }}
           multiline
           textAlignVertical="top"
-          editable={!isListening}
         />
-        <TouchableOpacity
-          style={[styles.micBtn, isListening && styles.micBtnActive]}
-          onPress={handleMicPress}
-          activeOpacity={0.75}
-        >
-          <Ionicons
-            name={isListening ? 'stop-circle' : 'mic'}
-            size={26}
-            color={isListening ? '#FFF' : '#4CAF50'}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {isListening && <Text style={styles.listeningHint}>聆聽中…請說出食物描述</Text>}
-      {speechError ? <Text style={styles.speechErrorText}>{speechError}</Text> : null}
 
       <Text
         style={[
@@ -1127,44 +1068,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     marginBottom: 8,
   },
-  textInputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-    gap: 8,
-  },
-  textDescriptionInputFlex: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  micBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  micBtnActive: {
-    backgroundColor: '#F44336',
-    borderColor: '#F44336',
-  },
-  listeningHint: {
-    fontSize: 13,
-    color: '#4CAF50',
-    fontWeight: '600',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  speechErrorText: {
-    fontSize: 13,
-    color: '#F44336',
-    marginBottom: 6,
-  },
-  textLengthHint: { fontSize: 13, color: '#888', marginBottom: 14 },
+textLengthHint: { fontSize: 13, color: '#888', marginBottom: 14 },
   textLengthHintWarn: { color: '#E65100', fontWeight: '600' },
   textAnalyzingPlaceholder: {
     height: 120,

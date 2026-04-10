@@ -29,14 +29,7 @@
     "plugins": [
       "expo-secure-store",
       "expo-sqlite",
-      "expo-web-browser",
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "Allow CalorieBank to use the microphone for voice input.",
-          "speechRecognitionPermission": "Allow CalorieBank to recognize your speech to fill in food descriptions."
-        }
-      ]
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
