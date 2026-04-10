@@ -19,15 +19,33 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as SecureStore from 'expo-secure-store';
 import { analyzeFoodImage, analyzeFoodText, FoodAnalysisResult } from '../services/geminiService';
+import { analyzeGroqFoodImage, analyzeGroqFoodText } from '../services/groqService';
 import { MIN_FOOD_TEXT_DESCRIPTION_LENGTH } from '../constants/foodText';
 import { useAppContext } from '../context/AppContext';
 import { calculateMacroGoals } from '../utils/fitness';
 import { getMealTypeByTime, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../utils/time';
 import GeminiConfigModal from './GeminiConfigModal';
 import FoodTagEditorModal from './FoodTagEditorModal';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 
 const SECURE_KEY = 'gemini_api_key';
+const GROQ_SECURE_KEY = 'groq_api_key';
 const DEFAULT_FOOD_TAGS = ['大碗', '小份', '半份', '加蛋', '少油'];
+
+function isGeminiOverloadError(msg: string): boolean {
+  return (
+    msg.includes('503') ||
+    msg.includes('high demand') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('429') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('使用人數過多') ||
+    msg.includes('頻率限制')
+  );
+}
 
 const PORTION_MULTIPLIER_MIN = 0.01;
 const PORTION_MULTIPLIER_MAX = 10;
@@ -83,10 +101,44 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
   const [manualCarbs, setManualCarbs] = useState('');
   const [manualFat, setManualFat] = useState('');
   const [textDescription, setTextDescription] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
 
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK'>(getMealTypeByTime());
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState('1');
+
+  useSpeechRecognitionEvent('start', () => setIsListening(true));
+  useSpeechRecognitionEvent('end', () => setIsListening(false));
+  useSpeechRecognitionEvent('error', (event) => {
+    setIsListening(false);
+    setSpeechError(event?.message ?? '語音辨識失敗');
+  });
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event?.results?.[0]?.transcript ?? '';
+    setTextDescription(transcript);
+    setErrorMsg('');
+    if (event?.isFinal) setIsListening(false);
+  });
+
+  const handleMicPress = async () => {
+    if (isListening) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    setSpeechError(null);
+    const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!granted) {
+      Alert.alert('需要麥克風權限', '請在設定中允許 CalorieBank 使用麥克風與語音辨識。');
+      return;
+    }
+    ExpoSpeechRecognitionModule.start({
+      lang: 'zh-TW',
+      interimResults: true,
+      continuous: false,
+      requiresOnDeviceRecognition: false,
+    });
+  };
 
   const resetAll = () => {
     setStage('idle');
@@ -102,6 +154,9 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setManualCarbs('');
     setManualFat('');
     setTextDescription('');
+    setIsListening(false);
+    setSpeechError(null);
+    ExpoSpeechRecognitionModule.stop();
     setLastAnalysisSource(null);
     setSelectedMealType(getMealTypeByTime());
     setPortionMultiplier('1');
@@ -179,7 +234,30 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setErrorMsg('');
 
     try {
-      const res = await analyzeFoodImage(imageBase64, imageMime, apiKey, modelName, hints);
+      let res: FoodAnalysisResult;
+      try {
+        res = await analyzeFoodImage(imageBase64, imageMime, apiKey, modelName, hints);
+      } catch (geminiErr: any) {
+        const groqKey = Platform.OS !== 'web'
+          ? (await SecureStore.getItemAsync(GROQ_SECURE_KEY) || '')
+          : '';
+        const isOverload = isGeminiOverloadError(geminiErr.message || '');
+        console.log('[FoodScan] Gemini error:', geminiErr.message, '| isOverload:', isOverload, '| groqKey:', !!groqKey);
+        if (isOverload) {
+          if (groqKey) {
+            setErrorMsg('Gemini 繁忙，正在切換備用 AI...');
+            res = await analyzeGroqFoodImage(imageBase64, imageMime, groqKey, hints);
+          } else {
+            setStage('idle');
+            setErrorMsg('Gemini 目前使用人數過多。請至「設定備用 AI」輸入 Groq API Key，即可自動切換。');
+            resumeAfterConfigRef.current = 'image';
+            setShowConfig(true);
+            return;
+          }
+        } else {
+          throw geminiErr;
+        }
+      }
       setResult(res);
       setEditName(res.name);
       setEditCalories(res.calories.toString());
@@ -230,7 +308,30 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
     setErrorMsg('');
 
     try {
-      const res = await analyzeFoodText(merged, apiKey, modelName);
+      let res: FoodAnalysisResult;
+      try {
+        res = await analyzeFoodText(merged, apiKey, modelName);
+      } catch (geminiErr: any) {
+        const groqKey = Platform.OS !== 'web'
+          ? (await SecureStore.getItemAsync(GROQ_SECURE_KEY) || '')
+          : '';
+        const isOverload = isGeminiOverloadError(geminiErr.message || '');
+        console.log('[FoodScan] Gemini text error:', geminiErr.message, '| isOverload:', isOverload, '| groqKey:', !!groqKey);
+        if (isOverload) {
+          if (groqKey) {
+            setErrorMsg('Gemini 繁忙，正在切換備用 AI...');
+            res = await analyzeGroqFoodText(merged, groqKey);
+          } else {
+            setStage('idle');
+            setErrorMsg('Gemini 目前使用人數過多。請至「設定備用 AI」輸入 Groq API Key，即可自動切換。');
+            resumeAfterConfigRef.current = 'text';
+            setShowConfig(true);
+            return;
+          }
+        } else {
+          throw geminiErr;
+        }
+      }
       setResult(res);
       setEditName(res.name);
       setEditCalories(res.calories.toString());
@@ -442,18 +543,36 @@ export default function FoodScanModal({ visible, onClose, onConfirm, date }: Foo
         </View>
       ) : null}
 
-      <TextInput
-        style={styles.textDescriptionInput}
-        placeholder="例如：連鎖店照燒雞腿便當，飯吃一半、有配菜玉米"
-        placeholderTextColor="#BBB"
-        value={textDescription}
-        onChangeText={(t) => {
-          setTextDescription(t);
-          setErrorMsg('');
-        }}
-        multiline
-        textAlignVertical="top"
-      />
+      <View style={styles.textInputRow}>
+        <TextInput
+          style={[styles.textDescriptionInput, styles.textDescriptionInputFlex]}
+          placeholder="例如：連鎖店照燒雞腿便當，飯吃一半、有配菜玉米"
+          placeholderTextColor="#BBB"
+          value={textDescription}
+          onChangeText={(t) => {
+            setTextDescription(t);
+            setErrorMsg('');
+          }}
+          multiline
+          textAlignVertical="top"
+          editable={!isListening}
+        />
+        <TouchableOpacity
+          style={[styles.micBtn, isListening && styles.micBtnActive]}
+          onPress={handleMicPress}
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name={isListening ? 'stop-circle' : 'mic'}
+            size={26}
+            color={isListening ? '#FFF' : '#4CAF50'}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {isListening && <Text style={styles.listeningHint}>聆聽中…請說出食物描述</Text>}
+      {speechError ? <Text style={styles.speechErrorText}>{speechError}</Text> : null}
+
       <Text
         style={[
           styles.textLengthHint,
@@ -1007,6 +1126,43 @@ const styles = StyleSheet.create({
     color: '#333',
     backgroundColor: '#FFF',
     marginBottom: 8,
+  },
+  textInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  textDescriptionInputFlex: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  micBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  micBtnActive: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
+  },
+  listeningHint: {
+    fontSize: 13,
+    color: '#4CAF50',
+    fontWeight: '600',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  speechErrorText: {
+    fontSize: 13,
+    color: '#F44336',
+    marginBottom: 6,
   },
   textLengthHint: { fontSize: 13, color: '#888', marginBottom: 14 },
   textLengthHintWarn: { color: '#E65100', fontWeight: '600' },

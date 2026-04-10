@@ -16,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { validateGeminiKey, listAvailableModels } from '../services/geminiService';
+import { validateGroqKey } from '../services/groqService';
 import { useAppContext } from '../context/AppContext';
 
 const SECURE_KEY = 'gemini_api_key';
+const GROQ_SECURE_KEY = 'groq_api_key';
 
 interface GeminiConfigModalProps {
   visible: boolean;
@@ -53,6 +55,8 @@ export default function GeminiConfigModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [dynamicModels, setDynamicModels] = useState<{ id: string; name: string }[]>([]);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [groqKey, setGroqKey] = useState('');
+  const [isVerifyingGroq, setIsVerifyingGroq] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -65,6 +69,8 @@ export default function GeminiConfigModal({
     if (Platform.OS !== 'web') {
       const saved = await SecureStore.getItemAsync(SECURE_KEY);
       if (saved) setApiKey(saved);
+      const savedGroq = await SecureStore.getItemAsync(GROQ_SECURE_KEY);
+      if (savedGroq) setGroqKey(savedGroq);
     }
   };
 
@@ -85,6 +91,7 @@ export default function GeminiConfigModal({
     try {
       if (Platform.OS !== 'web') {
         await SecureStore.setItemAsync(SECURE_KEY, apiKey.trim());
+        await handleSaveGroqKey();
       } else {
         (global as any).__geminiKey = apiKey.trim();
       }
@@ -122,6 +129,30 @@ export default function GeminiConfigModal({
       Alert.alert('驗證失敗', error.message || '請檢查 API Key 或型號是否正確');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleSaveGroqKey = async () => {
+    if (groqKey.trim()) {
+      await SecureStore.setItemAsync(GROQ_SECURE_KEY, groqKey.trim());
+    } else {
+      await SecureStore.deleteItemAsync(GROQ_SECURE_KEY);
+    }
+  };
+
+  const handleVerifyGroqKey = async () => {
+    if (!groqKey.trim()) {
+      Alert.alert('提示', '請先輸入 Groq API Key');
+      return;
+    }
+    setIsVerifyingGroq(true);
+    try {
+      await validateGroqKey(groqKey.trim());
+      Alert.alert('驗證成功', 'Groq API Key 可正常連線。');
+    } catch (error: any) {
+      Alert.alert('驗證失敗', error.message || '請確認 Key 是否正確');
+    } finally {
+      setIsVerifyingGroq(false);
     }
   };
 
@@ -324,6 +355,42 @@ export default function GeminiConfigModal({
           </View>
         )}
       </TouchableOpacity>
+
+      {/* Fallback AI (Groq) Section */}
+      <View style={styles.groqSection}>
+        <View style={styles.groqHeader}>
+          <MaterialCommunityIcons name="lightning-bolt" size={18} color="#FF6B00" />
+          <Text style={styles.groqTitle}>備用 AI（Gemini 超載時自動啟用）</Text>
+        </View>
+        <Text style={styles.groqDesc}>
+          Gemini 免費版人數上限時，自動切換 Groq 繼續分析。免費申請：
+          <Text style={styles.groqLink} onPress={() => Linking.openURL('https://console.groq.com')}>
+            console.groq.com
+          </Text>
+        </Text>
+        <View style={styles.groqInputRow}>
+          <TextInput
+            style={[styles.textInput, { flex: 1 }]}
+            placeholder="貼上 Groq API Key（選填）"
+            placeholderTextColor="#999"
+            value={groqKey}
+            onChangeText={setGroqKey}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            style={[styles.groqVerifyBtn, isVerifyingGroq && styles.disabledBtn]}
+            onPress={handleVerifyGroqKey}
+            disabled={isVerifyingGroq}
+          >
+            {isVerifyingGroq ? (
+              <ActivityIndicator color="#FF6B00" size="small" />
+            ) : (
+              <Text style={styles.groqVerifyBtnText}>驗證</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <TouchableOpacity style={styles.backBtn} onPress={() => setStep(2)}>
         <Text style={styles.backBtnText}>回上一步</Text>
@@ -575,5 +642,56 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 8,
     marginLeft: 4,
+  },
+  groqSection: {
+    width: '100%',
+    backgroundColor: '#FFF8F0',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFD9B0',
+  },
+  groqHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  groqTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FF6B00',
+  },
+  groqDesc: {
+    fontSize: 12,
+    color: '#888',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  groqLink: {
+    color: '#FF6B00',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  groqInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  groqVerifyBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FF6B00',
+    alignItems: 'center',
+  },
+  groqVerifyBtnText: {
+    color: '#FF6B00',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

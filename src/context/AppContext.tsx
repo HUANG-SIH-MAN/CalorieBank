@@ -348,6 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Clear SecureStore
       if (Platform.OS !== 'web') {
         await SecureStore.deleteItemAsync('gemini_api_key');
+        await SecureStore.deleteItemAsync('groq_api_key');
       } else {
         (global as any).__geminiKey = '';
       }

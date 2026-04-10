@@ -440,7 +440,7 @@ export default function SettingsScreen() {
           <Text style={styles.aiHint}>本 App 採去中心化設計，API Key 與模型預算由用戶自行管理。</Text>
 
           <TouchableOpacity
-            style={[styles.card, { marginTop: 12 }]}
+            style={[styles.card, styles.aiCard, { marginTop: 12 }]}
             onPress={() => setSavedMealsModalVisible(true)}
           >
             <View style={styles.aiCardContent}>
