@@ -198,7 +198,7 @@ export default function GeminiConfigModal({
   );
 
   const renderStep2 = () => (
-    <View style={styles.stepContainer}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContainer}>
       <Text style={styles.stepTitle}>步驟 1：取得 API Key</Text>
       <Text style={styles.stepDesc}>
         點擊下方按鈕前往 Google AI Studio，點擊 「Create API key」 即可免費生成。
@@ -233,7 +233,7 @@ export default function GeminiConfigModal({
       <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
         <Text style={styles.backBtnText}>回上一步</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 
   const renderStep3 = () => (
@@ -575,6 +575,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#EEE',
+    color: '#333',
   },
   textInputSmall: {
     backgroundColor: '#F8F9FA',
@@ -585,6 +586,7 @@ const styles = StyleSheet.create({
     borderColor: '#EEE',
     marginTop: 10,
     marginLeft: 30,
+    color: '#333',
   },
   backBtn: {
     padding: 15,
